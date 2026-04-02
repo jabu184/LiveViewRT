@@ -1460,11 +1460,20 @@ function renderUtilTables() {
     if (u2Col === 'name') return u2Asc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
     return u2Asc ? a.pct - b.pct : b.pct - a.pct;
   });
-  const tb2 = document.getElementById('util2Tbody');
-  if (tb2) {
-    tb2.innerHTML = arr2.map(item => {
+  const grid2 = document.getElementById('util2Grid');
+  if (grid2) {
+    grid2.innerHTML = arr2.map(item => {
       const col = item.pct > 80 ? 'var(--green)' : item.pct > 60 ? 'var(--amber)' : 'var(--red)';
-      return `<tr><td style="font-weight:600;font-size:12px">${item.name}</td><td style="font-family:var(--mono);font-size:12px;color:${col};font-weight:500">${item.pct.toFixed(0)}%</td><td><div class="uptime-bar" style="margin:0;height:8px"><div class="uptime-fill" style="width:${item.pct}%;background:${col}"></div></div></td></tr>`;
+      return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg3);padding:16px;border-radius:var(--radius-lg);border:1px solid var(--border)">
+        <div style="position:relative;width:68px;height:68px;margin-bottom:12px">
+          <svg width="68" height="68" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="15.9155" fill="none" stroke="var(--border)" stroke-width="3"></circle>
+            <circle cx="18" cy="18" r="15.9155" fill="none" stroke="${col}" stroke-width="3" stroke-dasharray="${item.pct}, 100" stroke-dashoffset="25" stroke-linecap="round"></circle>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;color:${col}">${item.pct.toFixed(0)}%</div>
+        </div>
+        <div style="font-weight:600;font-size:13px;text-align:center;color:var(--text)">${item.name}</div>
+      </div>`;
     }).join('');
   }
 }
@@ -1681,16 +1690,14 @@ async function loadAdminData(){
       </div>
     </div>
     <div class="card">
-      <div class="card-head">True Clinical Utilisation (${adminReport.period_label})</div>
-      <div class="card-body" style="padding:0">
-        <table class="tbl" style="margin:0">
-          <thead><tr>
-            <th style="cursor:pointer;user-select:none" onclick="sortUtil2('name')" title="Sort">Machine &#8597;</th>
-            <th style="cursor:pointer;user-select:none" onclick="sortUtil2('pct')" title="Sort">Clinical Uptime % &#8597;</th>
-            <th style="width:100%"></th>
-          </tr></thead>
-          <tbody id="util2Tbody"></tbody>
-        </table>
+      <div class="card-head" style="display:flex;justify-content:space-between;align-items:center">
+        <span>True Clinical Utilisation (${adminReport.period_label})</span>
+        <div style="display:flex;gap:12px">
+          <span style="font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text3);cursor:pointer;letter-spacing:0.04em" onclick="sortUtil2('name')" title="Sort by Name">Sort Name &#8597;</span>
+          <span style="font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text3);cursor:pointer;letter-spacing:0.04em" onclick="sortUtil2('pct')" title="Sort by %">Sort % &#8597;</span>
+        </div>
+      </div>
+      <div class="card-body" id="util2Grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:16px;padding:16px">
       </div>
     </div>`;
   renderUtilTables();

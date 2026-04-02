@@ -388,6 +388,15 @@ app.get('/api/audit', (req, res) => {
   }
 });
 
+// DELETE audit log entry
+app.delete('/api/audit/:id', (req, res) => {
+  const { id } = req.params;
+  const audit = db.prepare('SELECT * FROM audit_trail WHERE id=?').get(id);
+  if (!audit) return res.status(404).json({ error: 'Not found' });
+  queries.deleteAudit.run(id);
+  res.json({ success: true });
+});
+
 // GET status history for a machine
 app.get('/api/machines/:id/history', (req, res) => {
   res.json(queries.getStatusHistory.all(req.params.id));
