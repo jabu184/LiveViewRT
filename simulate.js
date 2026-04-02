@@ -121,15 +121,35 @@ function togglePower(machine, user, sqlTime) {
 
 function changeStatus(machine, user, sqlTime) {
     if (!machine.power || machine.status === 'breakdown') return;
-    // Heavily bias the array towards clinical statuses
-    const possibleStatuses = ['available', 'available', 'treatment', 'treatment', 'treatment', 'qa'];
-    const newStatus = randomItem(possibleStatuses);
+    
+    let newStatus = machine.status;
+    const diceRoll = Math.random();
+
+    // Implement the sequential chain: service > qa > on > available (clinical) <-> treatment > offline
+    if (machine.status === 'service') {
+        if (diceRoll < 0.4) newStatus = 'qa';
+    } else if (machine.status === 'qa') {
+        if (diceRoll < 0.4) newStatus = 'on';
+    } else if (machine.status === 'on') {
+        if (diceRoll < 0.4) newStatus = 'available';
+    } else if (machine.status === 'available') {
+        if (diceRoll < 0.3) newStatus = 'treatment';
+        else if (diceRoll < 0.05) newStatus = 'offline';
+    } else if (machine.status === 'treatment') {
+        if (diceRoll < 0.4) newStatus = 'available';
+    } else if (machine.status === 'offline') {
+        if (diceRoll < 0.2) newStatus = 'available';
+    } else {
+        const possibleStatuses = ['available', 'treatment', 'qa'];
+        newStatus = randomItem(possibleStatuses);
+    }
+
     if (newStatus === machine.status) return;
 
-    simQueries.insertStatusHistory.run({ machine_id: machine.id, old_status: machine.status, new_status: newStatus, old_power: machine.power, new_power: machine.power, changed_by: user, reason: 'Simulated status change', created_at: sqlTime });
+    simQueries.insertStatusHistory.run({ machine_id: machine.id, old_status: machine.status, new_status: newStatus, old_power: machine.power, new_power: machine.power, changed_by: user, reason: 'Simulated status progression', created_at: sqlTime });
     simQueries.updateStatus.run({ id: machine.id, status: newStatus, updated_at: sqlTime });
-    simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'STATUS_CHANGE', detail: `Simulated: ${machine.status} → ${newStatus}`, ip_address: '127.0.0.1', created_at: sqlTime });
-    simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: 'System', activity: 'Status change', notes: `${machine.status} → ${newStatus} (simulated)`, created_at: sqlTime });
+    simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'STATUS_CHANGE', detail: `Simulated: ${machine.status} → ${newStatus} (progression)`, ip_address: '127.0.0.1', created_at: sqlTime });
+    simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: 'System', activity: 'Status change', notes: `${machine.status} → ${newStatus} (simulated progression)`, created_at: sqlTime });
 }
 
 function reportFault(machine, user, role, sqlTime) {
@@ -166,11 +186,11 @@ function resolveBreakdown(machine, user, simTime, sqlTime) {
         downtimeHrs = getWorkingHours(start, simTime);
     }
 
-    const newStatus = machine.power ? 'on' : 'none';
-    simQueries.insertStatusHistory.run({ machine_id: machine.id, old_status: machine.status, new_status: newStatus, old_power: machine.power, new_power: machine.power, changed_by: user, reason: 'Simulated breakdown resolved', created_at: sqlTime });
+    const newStatus = machine.power ? 'service' : 'none'; // Begin the chain at service
+    simQueries.insertStatusHistory.run({ machine_id: machine.id, old_status: machine.status, new_status: newStatus, old_power: machine.power, new_power: machine.power, changed_by: user, reason: 'Simulated breakdown resolved (entering service)', created_at: sqlTime });
     simQueries.updateStatus.run({ id: machine.id, status: newStatus, updated_at: sqlTime });
     
-    const detailStr = `Simulated breakdown resolved. Downtime: ${downtimeHrs.toFixed(2)}h.`;
+    const detailStr = `Simulated breakdown resolved. Downtime: ${downtimeHrs.toFixed(2)}h. Machine entered ${newStatus}.`;
     simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'BREAKDOWN_RESOLVED', detail: detailStr, ip_address: '127.0.0.1', created_at: sqlTime });
     simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: 'System', activity: 'Breakdown resolved', notes: detailStr, created_at: sqlTime });
 }
