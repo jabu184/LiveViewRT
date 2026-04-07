@@ -427,12 +427,15 @@ app.get('/api/audit/:id/source', (req, res) => {
     if (audit.action === 'LOG_ENTRY') {
       source = db.prepare(`SELECT * FROM activity_log WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') LIMIT 1`).get(mid, t, t);
       if(source) type = 'activity_log';
-    } else if (['STATUS_CHANGE', 'POWER_CHANGE', 'BREAKDOWN_RESOLVED'].includes(audit.action)) {
+    } else if (['STATUS_CHANGE', 'POWER_CHANGE'].includes(audit.action)) {
       source = db.prepare(`SELECT * FROM status_history WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') LIMIT 1`).get(mid, t, t);
       if(source) type = 'status_history';
     } else if (audit.action === 'FAULT_REPORTED') {
       source = db.prepare(`SELECT * FROM faults WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') LIMIT 1`).get(mid, t, t);
       if(source) type = 'faults';
+    } else if (['BREAKDOWN_RESOLVED', 'FAULT_RESOLVED'].includes(audit.action)) {
+      source = db.prepare(`SELECT * FROM faults WHERE machine_id=? AND resolved_at >= datetime(?, '-2 seconds') AND resolved_at <= datetime(?, '+2 seconds') LIMIT 1`).get(mid, t, t);
+      if(source) type = 'faults_resolve';
     }
   }
   res.json({ audit, source, type });
@@ -441,7 +444,7 @@ app.get('/api/audit/:id/source', (req, res) => {
 // PUT edit audit AND underlying source
 app.put('/api/audit/:id/source', (req, res) => {
   const { id } = req.params;
-  const { type, source_id, user_name, detail, activity, notes, reason, category, severity, description } = req.body;
+  const { type, source_id, user_name, detail, activity, notes, reason, category, severity, description, downtime_hrs } = req.body;
   if (!user_name) return res.status(400).json({ error: 'user_name required' });
   
   const audit = db.prepare('SELECT * FROM audit_trail WHERE id=?').get(id);
@@ -456,11 +459,18 @@ app.put('/api/audit/:id/source', (req, res) => {
     let newDetail = detail;
     if (audit.action === 'STATUS_CHANGE') newDetail = `${sh.old_status} → ${sh.new_status}${reason ? ': ' + reason : ''}`;
     if (audit.action === 'POWER_CHANGE') newDetail = `Machine turned ${sh.new_power ? 'ON' : 'OFF'}${reason ? ': ' + reason : ''}`;
-    if (audit.action === 'BREAKDOWN_RESOLVED') newDetail = audit.detail; 
     db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, newDetail, id);
   } else if (type === 'faults' && source_id) {
     db.prepare('UPDATE faults SET user_name=?, category=?, severity=?, description=? WHERE id=?').run(user_name, category, severity, description, source_id);
     db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, `[${severity}] ${category}: ${description.substring(0, 100)}`, id);
+  } else if (type === 'faults_resolve' && source_id) {
+    db.prepare('UPDATE faults SET resolved_by=?, category=?, severity=?, description=?, downtime_hrs=? WHERE id=?').run(user_name, category, severity, description, downtime_hrs || 0, source_id);
+    if (audit.action === 'BREAKDOWN_RESOLVED') {
+       db.prepare(`UPDATE status_history SET changed_by=? WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(user_name, audit.machine_id, audit.created_at, audit.created_at);
+       db.prepare(`UPDATE activity_log SET user_name=? WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(user_name, audit.machine_id, audit.created_at, audit.created_at);
+    }
+    let newDetail = audit.detail.replace(/Downtime: [0-9.]+h/, `Downtime: ${downtime_hrs || 0}h`);
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, newDetail, id);
   } else {
     db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, detail || audit.detail, id);
   }

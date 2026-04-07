@@ -107,36 +107,37 @@ if (count.n === 0) {
     VALUES (@id, @name, @model, @location, @energy, @installed, @status, @power)
   `);
   const machines = [
-    { id: `LA8`, name: `LA8`, model: `Varian TrueBeam`, location: `Treatment Room 1`, energy: `6/10/15 MV`, installed: `2019`, status: 'none', power: 0 },
-    { id: `LA10`, name: `LA10`, model: `Varian TrueBeam`, location: `Treatment Room 2`, energy: `6/10/18 MV FFF`, installed: `2018`, status: 'none', power: 0 },
-    { id: `LA11`, name: `LA11`, model: `Varian TrueBeam`, location: `Treatment Room 3`, energy: `7 MV (MR-guided)`, installed: `2022`, status: 'none', power: 0 },
-    { id: `LA12`, name: `LA12`, model: `Varian Halcyon`, location: `Treatment Room 4`, energy: `6 MV FFF`, installed: `2021`, status: 'none', power: 0 },
-    { id: `HAL6`, name: `HAL6`, model: `Varian Halcyon`, location: `Treatment Room 5`, energy: `6 MV`, installed: `2020`, status: 'none', power: 0 },
-    { id: `HAL7`, name: `HAL7`, model: `Varian Halcyon`, location: `Treatment Room 6`, energy: `6/10 MV`, installed: `2024`, status: 'none', power: 0 },
-    { id: `ETHOS3`, name: `ETHOS3`, model: `Varian ETHOS`, location: `Treatment Room 6`, energy: `6/10 MV`, installed: `2024`, status: 'none', power: 0 },
-    { id: `Definition`, name: `Definition`, model: `Siemens Definition`, location: `Treatment Room 6`, energy: `6/10 MV`, installed: `2024`, status: 'none', power: 0 },
-    { id: `GoOpenPro`, name: `GoOpenPro`, model: `Siemens GoOpenPro`, location: `Treatment Room 6`, energy: `6/10 MV`, installed: `2024`, status: 'none', power: 0 },
-    { id: `Test Machine`, name: `Test Machine`, model: `Halcyon`, location: ``, energy: `6 MV FFF`, installed: ``, status: 'none', power: 0 }
+    { id:'LA8', name:'LA8', model:'Varian TrueBeam',     location:'Treatment Room 1', energy:'6/10/15 MV',          installed:'2019', status:'none', power:0 },
+    { id:'LA10', name:'LA10', model:'Varian TrueBeam',     location:'Treatment Room 2', energy:'6/10/18 MV FFF',      installed:'2018', status:'none', power:0 },
+    { id:'LA11', name:'LA11', model:'Varian TrueBeamL',    location:'Treatment Room 3', energy:'7 MV (MR-guided)',    installed:'2022', status:'none', power:0 },
+    { id:'LA12', name:'LA12', model:'Varian Halcyon',      location:'Treatment Room 4', energy:'6 MV FFF',            installed:'2021', status:'none', power:0 },
+    { id:'HAL6',   name:'HAL6',    model:'Varian Halcyont',    location:'Treatment Room 5', energy:'6 MV',                installed:'2020', status:'none', power:0 },
+    { id:'HAL7', name:'HAL7', model:'Varian Halcyone',      location:'Treatment Room 6', energy:'6/10 MV',             installed:'2024', status:'none', power:0 },
+    { id:'ETHOS3', name:'ETHOS3', model:'Varian ETHOS',      location:'Treatment Room 6', energy:'6/10 MV',             installed:'2024', status:'none', power:0 },
+    { id:'Definition', name:'Definition', model:'Siemens Definition',      location:'Treatment Room 6', energy:'6/10 MV',             installed:'2024', status:'none', power:0 },
+    { id:'GoOpenPro', name:'GoOpenPro', model:'Siemens GoOpenPro',      location:'Treatment Room 6', energy:'6/10 MV',             installed:'2024', status:'none', power:0 }
   ];
   machines.forEach(m => insert.run(m));
-  console.log('[db] Seeded default machines from snapshot');
+  console.log('[db] Seeded default machines');
 }
 
+// Ensure all machines have a display order (useful for existing installations upgrading)
 try { db.exec('UPDATE machines SET display_order = rowid WHERE display_order = 0'); } catch (e) { /* Ignore */ }
 
 // ── SEED DEFAULT SETTINGS ─────────────────────────────────────────────
-const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
-insertSetting.run(`clinical_start`, `8`);
-insertSetting.run(`clinical_end`, `19`);
-insertSetting.run(`fault_categories`, `["Unknown","Mechanical","Electrical","Software","Imaging / IGRT","Dosimetry","Safety Interlock","MLC / Collimator","Couch","Other"]`);
-insertSetting.run(`fault_severities`, `["Low","Medium","High","Critical"]`);
-insertSetting.run(`admin_pwd_enabled`, `0`);
-insertSetting.run(`admin_pwd`, `admin`);
-insertSetting.run(`activity_categories`, `["Comment","Treatment session","QA check","Service","Calibration","Inspection","Status change","Other"]`);
-insertSetting.run(`default_fault_category`, `Unknown`);
-insertSetting.run(`default_fault_severity`, `Medium`);
-insertSetting.run(`default_activity_category`, `Comment`);
-
+const sCount = db.prepare('SELECT COUNT(*) as n FROM settings').get();
+if (sCount.n === 0) {
+  db.prepare("INSERT INTO settings (key, value) VALUES ('clinical_start', '07:00')").run();
+  db.prepare("INSERT INTO settings (key, value) VALUES ('clinical_end', '20:00')").run();
+}
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('fault_categories', '[\"Mechanical\",\"Electrical\",\"Software\",\"Imaging / IGRT\",\"Dosimetry\",\"Safety Interlock\",\"MLC / Collimator\",\"Couch\",\"Other\"]')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('fault_severities', '[\"Low\",\"Medium\",\"High\",\"Critical\"]')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('activity_categories', '[\"Treatment session\",\"QA check\",\"Service\",\"Calibration\",\"Inspection\",\"Status change\",\"Other\"]')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('default_fault_category', 'Other')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('default_fault_severity', 'Low')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('default_activity_category', 'Treatment session')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_pwd_enabled', '0')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_pwd', 'admin')");
 
 // ── QUERY HELPERS ─────────────────────────────────────────────────────
 
