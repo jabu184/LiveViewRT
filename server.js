@@ -273,12 +273,16 @@ app.get('/api/faults', (req, res) => {
 
 // POST fault
 app.post('/api/faults', (req, res) => {
-  const { machine_id, user_name, user_role, category, severity, description, status_change } = req.body;
+  let { machine_id, user_name, user_role, category, severity, description, status_change } = req.body;
   if (!machine_id || !user_name || !user_role || !category || !severity || !description)
     return res.status(400).json({ error: 'All fault fields required' });
 
   const machine = queries.getMachine.get(machine_id);
   if (!machine) return res.status(404).json({ error: 'Machine not found' });
+
+  if (status_change === 'breakdown' && !severity.includes('High') && !severity.includes('Critical')) {
+    severity = 'High';
+  }
 
   const info = queries.insertFault.run({ machine_id, user_name, user_role, category, severity, description });
 
@@ -328,17 +332,22 @@ app.delete('/api/faults/:id', (req, res) => {
 // PATCH fault resolve
 app.patch('/api/faults/:id/resolve', (req, res) => {
   const { id } = req.params;
-  const { resolved_by, downtime_hrs } = req.body;
+  const { resolved_by, downtime_hrs, category, severity, description } = req.body;
   if (!resolved_by) return res.status(400).json({ error: 'resolved_by required' });
 
+  if (category && severity && description) {
+    db.prepare('UPDATE faults SET category=?, severity=?, description=? WHERE id=?').run(category, severity, description, id);
+  }
+
   queries.resolveFault.run({ id, resolved_by, downtime_hrs: parseFloat(downtime_hrs) || 0 });
+  const fault = db.prepare('SELECT f.*, m.name as machine_name FROM faults f JOIN machines m ON f.machine_id=m.id WHERE f.id=?').get(id);
+
   queries.insertAudit.run({
-    machine_id: null, user_name: resolved_by, action: 'FAULT_RESOLVED',
+    machine_id: fault.machine_id, user_name: resolved_by, action: 'FAULT_RESOLVED',
     detail: `Fault #${id} acknowledged. Downtime: ${downtime_hrs || 0}h`,
     ip_address: req.clientIp
   });
 
-  const fault = db.prepare('SELECT f.*, m.name as machine_name FROM faults f JOIN machines m ON f.machine_id=m.id WHERE f.id=?').get(id);
   broadcast('fault_updated', fault);
   res.json(fault);
 });
@@ -374,6 +383,25 @@ app.patch('/api/concessions/:id/resolve', (req, res) => {
   res.json(c);
 });
 
+// PUT edit concession
+app.put('/api/concessions/:id', (req, res) => {
+  const { id } = req.params;
+  const { type, description, user_name, review_by } = req.body;
+  if (!type || !description || !user_name) return res.status(400).json({ error: 'Missing fields' });
+
+  const c = db.prepare('SELECT * FROM concessions WHERE id=?').get(id);
+  if (!c) return res.status(404).json({ error: 'Not found' });
+
+  db.prepare('UPDATE concessions SET type=?, description=?, user_name=?, review_by=? WHERE id=?').run(type, description, user_name, review_by || null, id);
+
+  queries.insertAudit.run({ machine_id: c.machine_id, user_name, action: 'CONCESSION_EDITED', detail: `Edited to [${type}] ${description}`, ip_address: req.clientIp });
+  queries.insertActivity.run({ machine_id: c.machine_id, user_name, user_role: 'System', activity: 'Concession edited', notes: `[${type}] ${description}` });
+
+  const updated = db.prepare('SELECT * FROM concessions WHERE id=?').get(id);
+  broadcast('concession_updated', updated);
+  res.json(updated);
+});
+
 // GET audit trail
 app.get('/api/audit', (req, res) => {
   const { days } = req.query;
@@ -386,6 +414,104 @@ app.get('/api/audit', (req, res) => {
   } else {
     res.json(queries.getAudit.all());
   }
+});
+
+// GET audit source
+app.get('/api/audit/:id/source', (req, res) => {
+  const audit = db.prepare('SELECT * FROM audit_trail WHERE id=?').get(req.params.id);
+  if (!audit) return res.status(404).json({error: 'Not found'});
+  let source = null, type = 'unknown';
+  if (audit.machine_id) {
+    const t = audit.created_at;
+    const mid = audit.machine_id;
+    if (audit.action === 'LOG_ENTRY') {
+      source = db.prepare(`SELECT * FROM activity_log WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') LIMIT 1`).get(mid, t, t);
+      if(source) type = 'activity_log';
+    } else if (['STATUS_CHANGE', 'POWER_CHANGE', 'BREAKDOWN_RESOLVED'].includes(audit.action)) {
+      source = db.prepare(`SELECT * FROM status_history WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') LIMIT 1`).get(mid, t, t);
+      if(source) type = 'status_history';
+    } else if (audit.action === 'FAULT_REPORTED') {
+      source = db.prepare(`SELECT * FROM faults WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') LIMIT 1`).get(mid, t, t);
+      if(source) type = 'faults';
+    }
+  }
+  res.json({ audit, source, type });
+});
+
+// PUT edit audit AND underlying source
+app.put('/api/audit/:id/source', (req, res) => {
+  const { id } = req.params;
+  const { type, source_id, user_name, detail, activity, notes, reason, category, severity, description } = req.body;
+  if (!user_name) return res.status(400).json({ error: 'user_name required' });
+  
+  const audit = db.prepare('SELECT * FROM audit_trail WHERE id=?').get(id);
+  if (!audit) return res.status(404).json({ error: 'Not found' });
+  
+  if (type === 'activity_log' && source_id) {
+    db.prepare('UPDATE activity_log SET user_name=?, activity=?, notes=? WHERE id=?').run(user_name, activity, notes, source_id);
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, `${activity}: ${notes||''}`, id);
+  } else if (type === 'status_history' && source_id) {
+    db.prepare('UPDATE status_history SET changed_by=?, reason=? WHERE id=?').run(user_name, reason, source_id);
+    const sh = db.prepare('SELECT * FROM status_history WHERE id=?').get(source_id);
+    let newDetail = detail;
+    if (audit.action === 'STATUS_CHANGE') newDetail = `${sh.old_status} → ${sh.new_status}${reason ? ': ' + reason : ''}`;
+    if (audit.action === 'POWER_CHANGE') newDetail = `Machine turned ${sh.new_power ? 'ON' : 'OFF'}${reason ? ': ' + reason : ''}`;
+    if (audit.action === 'BREAKDOWN_RESOLVED') newDetail = audit.detail; 
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, newDetail, id);
+  } else if (type === 'faults' && source_id) {
+    db.prepare('UPDATE faults SET user_name=?, category=?, severity=?, description=? WHERE id=?').run(user_name, category, severity, description, source_id);
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, `[${severity}] ${category}: ${description.substring(0, 100)}`, id);
+  } else {
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, detail || audit.detail, id);
+  }
+  
+  broadcast('init', { machines: queries.getAllMachinesIncludingArchived.all(), activity: queries.getAllActivity.all(), faults: queries.getAllFaults.all(), concessions: queries.getActiveConcessions.all(), settings: queries.getSettings.all().reduce((acc, r) => ({...acc, [r.key]: r.value}), {}) });
+  res.json({ success: true });
+});
+
+// DELETE audit AND underlying source
+app.delete('/api/audit/:id/source', (req, res) => {
+  const { id } = req.params;
+  const audit = db.prepare('SELECT * FROM audit_trail WHERE id=?').get(id);
+  if (!audit) return res.status(404).json({ error: 'Not found' });
+  
+  if (audit.machine_id) {
+    const t = audit.created_at;
+    const mid = audit.machine_id;
+    
+    // Always clean up associated activity logs
+    db.prepare(`DELETE FROM activity_log WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(mid, t, t);
+    
+    if (['STATUS_CHANGE', 'POWER_CHANGE', 'BREAKDOWN_RESOLVED', 'FAULT_REPORTED'].includes(audit.action)) {
+      db.prepare(`DELETE FROM status_history WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(mid, t, t);
+    }
+    
+    if (audit.action === 'FAULT_REPORTED') {
+      db.prepare(`DELETE FROM faults WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(mid, t, t);
+    }
+    
+    if (audit.action === 'BREAKDOWN_RESOLVED' || audit.action === 'FAULT_RESOLVED') {
+      // Delete placeholder ad-hoc faults that were created and resolved concurrently
+      db.prepare(`DELETE FROM faults WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') AND resolved_at >= datetime(?, '-2 seconds') AND resolved_at <= datetime(?, '+2 seconds')`).run(mid, t, t, t, t);
+      // Un-resolve standard faults
+      db.prepare(`UPDATE faults SET status='open', resolved_by=NULL, resolved_at=NULL, downtime_hrs=NULL WHERE machine_id=? AND resolved_at >= datetime(?, '-2 seconds') AND resolved_at <= datetime(?, '+2 seconds')`).run(mid, t, t);
+    }
+    
+    if (audit.action === 'CONCESSION_ADDED') {
+      db.prepare(`DELETE FROM concessions WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(mid, t, t);
+    }
+  } else {
+    const t = audit.created_at;
+    db.prepare(`DELETE FROM activity_log WHERE created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(t, t);
+    if (audit.action === 'FAULT_RESOLVED') {
+      db.prepare(`UPDATE faults SET status='open', resolved_by=NULL, resolved_at=NULL, downtime_hrs=NULL WHERE resolved_at >= datetime(?, '-2 seconds') AND resolved_at <= datetime(?, '+2 seconds')`).run(t, t);
+    }
+  }
+  
+  db.prepare('DELETE FROM audit_trail WHERE id=?').run(id);
+  
+  broadcast('init', { machines: queries.getAllMachinesIncludingArchived.all(), activity: queries.getAllActivity.all(), faults: queries.getAllFaults.all(), concessions: queries.getActiveConcessions.all(), settings: queries.getSettings.all().reduce((acc, r) => ({...acc, [r.key]: r.value}), {}) });
+  res.json({ success: true });
 });
 
 // DELETE audit log entry
@@ -418,31 +544,40 @@ app.get('/api/machines/:id/breakdown-time', (req, res) => {
 // POST resolve breakdown
 app.post('/api/machines/:id/resolve-breakdown', (req, res) => {
   const { id } = req.params;
-  const { resolved_by, notes, downtime_hrs, next_status } = req.body;
+  const { resolved_by, notes, downtime_hrs, next_status, category, severity, description, fault_id } = req.body;
   if (!resolved_by) return res.status(400).json({ error: 'resolved_by required' });
 
   const machine = queries.getMachine.get(id);
-  if (!machine || machine.status !== 'breakdown') return res.status(400).json({ error: 'Machine is not in breakdown' });
+  if (!machine) return res.status(404).json({ error: 'Machine not found' });
 
   // Try to attach downtime to an open fault. If none exists, create a placeholder to store the downtime.
-  let openFault = db.prepare(`SELECT * FROM faults WHERE machine_id = ? AND status = 'open' AND (severity LIKE '%High%' OR severity LIKE '%Critical%') ORDER BY created_at DESC`).get(id);
+  let openFault;
+  if (fault_id) {
+    openFault = db.prepare('SELECT * FROM faults WHERE id = ?').get(fault_id);
+  } else {
+    openFault = db.prepare(`SELECT * FROM faults WHERE machine_id = ? AND status = 'open' AND (severity LIKE '%High%' OR severity LIKE '%Critical%') ORDER BY created_at DESC`).get(id);
+  }
   
   if (!openFault) {
     const info = queries.insertFault.run({
       machine_id: id, user_name: resolved_by, user_role: 'System', 
-      category: 'Other', severity: 'High', 
-      description: 'Breakdown downtime log (machine was placed in breakdown without an open fault).'
+      category: category || 'Other', severity: severity || 'High', 
+      description: description || 'Breakdown downtime log (machine was placed in breakdown without an open fault).'
     });
     openFault = db.prepare('SELECT * FROM faults WHERE id = ?').get(info.lastInsertRowid);
     const newFault = db.prepare('SELECT f.*, m.name as machine_name FROM faults f JOIN machines m ON f.machine_id=m.id WHERE f.id=?').get(info.lastInsertRowid);
     broadcast('fault_added', newFault);
   }
 
+  if (category && severity && description) {
+    db.prepare('UPDATE faults SET category=?, severity=?, description=? WHERE id=?').run(category, severity, description, openFault.id);
+  }
+
   queries.resolveFault.run({ id: openFault.id, resolved_by, downtime_hrs: parseFloat(downtime_hrs) || 0 });
   const updatedFault = db.prepare('SELECT f.*, m.name as machine_name FROM faults f JOIN machines m ON f.machine_id=m.id WHERE f.id=?').get(openFault.id);
   broadcast('fault_updated', updatedFault);
 
-  const newStatus = next_status || 'offline';
+  const newStatus = next_status || machine.status;
   let newPower = machine.power;
   // Ensure power is turned on if transitioning to a clinical/qa status
   if (!['breakdown', 'service', 'maintenance', 'offline', 'none'].includes(newStatus) && newPower === 0) {
@@ -450,12 +585,14 @@ app.post('/api/machines/:id/resolve-breakdown', (req, res) => {
     queries.updatePower.run({ id, power: 1 });
   }
 
-  queries.insertStatusHistory.run({ machine_id: id, old_status: machine.status, new_status: newStatus, old_power: machine.power, new_power: newPower, changed_by: resolved_by, reason: `Breakdown resolved${notes ? ': ' + notes : ''}` });
-  queries.updateStatus.run({ id, status: newStatus });
-  queries.insertAudit.run({ machine_id: id, user_name: resolved_by, action: 'BREAKDOWN_RESOLVED', detail: `Breakdown resolved. Status set to ${newStatus}. Downtime: ${downtime_hrs || 0}h`, ip_address: req.clientIp });
-  const actInfo = queries.insertActivity.run({ machine_id: id, user_name: resolved_by, user_role: 'System', activity: 'Breakdown resolved', notes: `Status set to ${newStatus}. Downtime: ${downtime_hrs || 0}h${notes ? ' (' + notes + ')' : ''}` });
-  const actEntry = db.prepare('SELECT a.*, m.name as machine_name FROM activity_log a JOIN machines m ON a.machine_id=m.id WHERE a.id=?').get(actInfo.lastInsertRowid);
-  broadcast('activity_added', actEntry);
+  if (machine.status !== newStatus || machine.power !== newPower || machine.status === 'breakdown') {
+    queries.insertStatusHistory.run({ machine_id: id, old_status: machine.status, new_status: newStatus, old_power: machine.power, new_power: newPower, changed_by: resolved_by, reason: `Breakdown resolved${notes ? ': ' + notes : ''}` });
+    queries.updateStatus.run({ id, status: newStatus });
+    queries.insertAudit.run({ machine_id: id, user_name: resolved_by, action: 'BREAKDOWN_RESOLVED', detail: `Breakdown resolved. Status set to ${newStatus}. Downtime: ${downtime_hrs || 0}h`, ip_address: req.clientIp });
+    const actInfo = queries.insertActivity.run({ machine_id: id, user_name: resolved_by, user_role: 'System', activity: 'Breakdown resolved', notes: `Status set to ${newStatus}. Downtime: ${downtime_hrs || 0}h${notes ? ' (' + notes + ')' : ''}` });
+    const actEntry = db.prepare('SELECT a.*, m.name as machine_name FROM activity_log a JOIN machines m ON a.machine_id=m.id WHERE a.id=?').get(actInfo.lastInsertRowid);
+    broadcast('activity_added', actEntry);
+  }
   const updated = queries.getMachine.get(id);
   broadcast('machine_updated', updated);
   res.json(updated);
@@ -494,6 +631,30 @@ app.post('/api/backup', (req, res) => {
   }
 });
 
+// GET download config backup
+app.get('/api/backup/download-config', (_req, res) => {
+  try {
+    db.pragma('wal_checkpoint(TRUNCATE)');
+    const dbPath = path.join(__dirname, 'data', 'rtdashboard.db');
+    const timestamp = new Date().toISOString().slice(0,10);
+    const tmpPath = path.join(__dirname, 'data', `rtdashboard_config_${timestamp}_${Date.now()}.db`);
+    
+    fs.copyFileSync(dbPath, tmpPath);
+    
+    const Database = require('better-sqlite3');
+    const tmpDb = new Database(tmpPath);
+    tmpDb.pragma('journal_mode = DELETE');
+    tmpDb.exec('DELETE FROM activity_log; DELETE FROM faults; DELETE FROM audit_trail; DELETE FROM status_history; DELETE FROM concessions; VACUUM;');
+    tmpDb.close();
+    
+    res.download(tmpPath, `rtdashboard_config_${timestamp}.db`, (err) => {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    });
+  } catch (e) {
+    res.status(500).send('Error downloading config database');
+  }
+});
+
 // GET download backup
 app.get('/api/backup/download', (_req, res) => {
   try {
@@ -529,33 +690,46 @@ app.post('/api/restore', (req, res) => {
 
 // PATCH settings
 app.patch('/api/settings', (req, res) => {
-  const { clinical_start, clinical_end, fault_categories, fault_severities, admin_pwd_enabled, admin_pwd } = req.body;
+  const { clinical_start, clinical_end, fault_categories, fault_severities, activity_categories, admin_pwd_enabled, admin_pwd, default_fault_category, default_fault_severity, default_activity_category } = req.body;
   if (clinical_start !== undefined) queries.updateSetting.run({ key: 'clinical_start', value: clinical_start.toString() });
   if (clinical_end !== undefined) queries.updateSetting.run({ key: 'clinical_end', value: clinical_end.toString() });
   if (fault_categories !== undefined) queries.updateSetting.run({ key: 'fault_categories', value: fault_categories });
   if (fault_severities !== undefined) queries.updateSetting.run({ key: 'fault_severities', value: fault_severities });
+  if (activity_categories !== undefined) queries.updateSetting.run({ key: 'activity_categories', value: activity_categories });
   if (admin_pwd_enabled !== undefined) queries.updateSetting.run({ key: 'admin_pwd_enabled', value: admin_pwd_enabled.toString() });
   if (admin_pwd !== undefined) queries.updateSetting.run({ key: 'admin_pwd', value: admin_pwd.toString() });
+  if (default_fault_category !== undefined) queries.updateSetting.run({ key: 'default_fault_category', value: default_fault_category });
+  if (default_fault_severity !== undefined) queries.updateSetting.run({ key: 'default_fault_severity', value: default_fault_severity });
+  if (default_activity_category !== undefined) queries.updateSetting.run({ key: 'default_activity_category', value: default_activity_category });
   const newSettings = queries.getSettings.all().reduce((acc, r) => ({...acc, [r.key]: r.value}), {});
   broadcast('settings_updated', newSettings);
   res.json(newSettings);
 });
 
 // Helper to calculate working hours (7am-8pm, Mon-Fri) between two dates
-function getWorkingHours(start, end, startH = 7, endH = 20) {
+function getWorkingHours(start, end, startStr = '07:00', endStr = '20:00') {
+  if (!startStr.includes(':')) startStr += ':00';
+  if (!endStr.includes(':')) endStr += ':00';
+  const [sH, sM] = startStr.split(':').map(Number);
+  const [eH, eM] = endStr.split(':').map(Number);
+  const startH = sH + sM/60;
+  const endH = eH + eM/60;
+
   let current = new Date(start);
   const endDt = new Date(end);
   let totalHours = 0;
   while (current < endDt) {
     let day = current.getDay();
     let hour = current.getHours();
+    let min = current.getMinutes();
+    let currH = hour + min/60 + current.getSeconds()/3600;
     // Skip weekends
     if (day === 0 || day === 6) { current.setHours(24, 0, 0, 0); continue; }
     // Skip out of hours
-    if (hour < startH) { current.setHours(startH, 0, 0, 0); continue; }
-    if (hour >= endH) { current.setHours(24, 0, 0, 0); continue; }
+    if (currH < startH) { current.setHours(sH, sM, 0, 0); continue; }
+    if (currH >= endH) { current.setHours(24, 0, 0, 0); continue; }
     let nextBoundary = new Date(current);
-    nextBoundary.setHours(endH, 0, 0, 0);
+    nextBoundary.setHours(eH, eM, 0, 0);
     if (endDt < nextBoundary) nextBoundary = endDt;
     totalHours += (nextBoundary - current) / 3600000;
     current = nextBoundary;
@@ -603,8 +777,8 @@ app.get('/api/report', (req, res) => {
   const yearly_faults = queries.getFaultsByPeriod.all({ since: yearSince.toISOString().replace('T', ' ').substring(0, 19) });
 
   const sRows = queries.getSettings.all().reduce((acc, r) => ({...acc, [r.key]: r.value}), {});
-  const startH = parseInt(sRows.clinical_start || '7');
-  const endH = parseInt(sRows.clinical_end || '20');
+  const startStr = sRows.clinical_start || '07:00';
+  const endStr = sRows.clinical_end || '20:00';
 
   const activity = db.prepare(`
     SELECT a.*, m.name as machine_name FROM activity_log a JOIN machines m ON a.machine_id=m.id
@@ -628,15 +802,20 @@ app.get('/api/report', (req, res) => {
         currentStatus = h.new_status;
         currentPower = h.new_power;
       } else {
-        const durationHrs = getWorkingHours(lastTime, hTime, startH, endH);
+        const durationHrs = getWorkingHours(lastTime, hTime, startStr, endStr);
         if (status_times[currentStatus] !== undefined) status_times[currentStatus] += durationHrs;
         currentStatus = h.new_status;
         currentPower = h.new_power;
         lastTime = hTime;
       }
     }
-    const durationHrs = getWorkingHours(lastTime, new Date().getTime(), startH, endH);
+    const durationHrs = getWorkingHours(lastTime, new Date().getTime(), startStr, endStr);
     if (status_times[currentStatus] !== undefined) status_times[currentStatus] += durationHrs;
+
+    // Per user request, user-entered downtime takes precedence and should be reflected everywhere.
+    // We overwrite the system-calculated breakdown time from status_history with the sum of
+    // user-entered downtime from faults, making it the single source of truth for all reports.
+    status_times.breakdown = downtime;
 
     return {
       machine: m,

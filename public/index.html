@@ -190,6 +190,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .toast-error{background:var(--red-bg);color:var(--red);border-color:var(--red-border)}
 .toast-info{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-border)}
 
+.cat-list-item { padding:7px 12px; border-radius:var(--radius); font-size:12px; color:var(--text2); cursor:pointer; transition:all 0.15s; user-select:none; margin-bottom:2px }
+.cat-list-item:hover { background:rgba(0,0,0,0.04); color:var(--text); }
+.cat-list-item.active { background:var(--blue-bg); color:var(--blue); font-weight:600; }
+
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 </style>
@@ -278,7 +282,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
             <option value="desc">Newest First</option><option value="asc">Oldest First</option>
           </select>
         </div>
-        <table class="tbl"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Machine</th><th>Detail</th><th style="width:40px"></th></tr></thead>
+        <table class="tbl"><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Machine</th><th>Detail</th><th style="width:85px"></th></tr></thead>
         <tbody id="auditBody"></tbody></table>
       </div>
       <div id="atab-config" class="tab-pane">
@@ -287,8 +291,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
           <div class="card-body">
             <p style="font-size:12px;color:var(--text2);margin-bottom:16px">These hours are used to calculate downtime and utilisation percentages, excluding evenings and weekends.</p>
             <div class="form-row">
-              <div class="form-group"><label>Start Hour (0-23)</label><input type="number" id="cfgStart" min="0" max="23"></div>
-              <div class="form-group"><label>End Hour (0-24)</label><input type="number" id="cfgEnd" min="1" max="24"></div>
+              <div class="form-group"><label>Start Time</label><input type="time" id="cfgStart"></div>
+              <div class="form-group"><label>End Time</label><input type="time" id="cfgEnd"></div>
             </div>
             <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
           </div>
@@ -315,6 +319,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
               <button class="btn" onclick="createServerBackup()">Create Server Backup</button>
               <button class="btn" onclick="downloadDatabase()">Download to PC</button>
+              <button class="btn" onclick="downloadConfigOnly()">Download Config Only</button>
             </div>
             <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:12px">
               <label class="btn btn-danger" style="display:inline-block;cursor:pointer">
@@ -326,7 +331,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
           </div>
         </div>
         
-        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;max-width:800px">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;max-width:1200px">
           <div class="card" style="flex:1;min-width:300px">
             <div class="card-head">Fault Categories</div>
             <div class="card-body">
@@ -344,6 +349,16 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
               <div style="display:flex;gap:8px">
                 <div class="form-group" style="flex:1;margin:0"><input id="cfgNewSev" placeholder="New severity..." onkeypress="if(event.key==='Enter') addSettingItem('fault_severities', 'cfgNewSev')"></div>
                 <button class="btn btn-primary" style="margin-top:0" onclick="addSettingItem('fault_severities', 'cfgNewSev')">Add</button>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="flex:1;min-width:300px">
+            <div class="card-head">Activity Categories</div>
+            <div class="card-body">
+              <div id="cfgActList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;max-height:220px;overflow-y:auto"></div>
+              <div style="display:flex;gap:8px">
+                <div class="form-group" style="flex:1;margin:0"><input id="cfgNewAct" placeholder="New activity..." onkeypress="if(event.key==='Enter') addSettingItem('activity_categories', 'cfgNewAct')"></div>
+                <button class="btn btn-primary" style="margin-top:0" onclick="addSettingItem('activity_categories', 'cfgNewAct')">Add</button>
               </div>
             </div>
           </div>
@@ -375,7 +390,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       <div class="form-group"><label>Your Name</label><input id="logUser" placeholder="e.g. J. Smith"></div>
       <div class="form-group"><label>Role</label><select id="logRole"><option>Radiographer</option><option>Physicist</option><option>Engineer</option><option>Dosimetrist</option><option>Admin</option></select></div>
     </div>
-    <div class="form-group"><label>Activity</label><select id="logActivity"><option>Treatment session</option><option>QA check</option><option>Service</option><option>Calibration</option><option>Inspection</option><option>Status change</option><option>Other</option></select></div>
+    <div class="form-group"><label>Activity</label><select id="logActivity"></select></div>
     <div class="form-group"><label>Notes</label><textarea id="logNotes" placeholder="Describe the activity&hellip;"></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('logModal')">Cancel</button>
@@ -439,7 +454,13 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
   <div class="modal" style="max-width:400px">
     <div class="modal-head"><h2>Acknowledge Fault</h2><button class="modal-close" onclick="closeModal('resolveModal')">&#10005;</button></div>
     <input type="hidden" id="resolveFaultId">
-    <div class="form-group"><label>Acknowledged By <span style="color:var(--red)">*</span></label><input id="resolveUser" placeholder="Your name"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Category</label><select id="resolveCategory"></select></div>
+      <div class="form-group"><label>Severity</label><select id="resolveSeverity"></select></div>
+    </div>
+    <div class="form-group"><label>Description</label><textarea id="resolveDesc" style="min-height:56px"></textarea></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div class="form-group"><label id="resolveUserLabel">Acknowledged By <span style="color:var(--red)">*</span></label><input id="resolveUser" placeholder="Your name"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('resolveModal')">Cancel</button>
       <button class="btn btn-success" onclick="submitResolve()">Acknowledge</button>
@@ -452,8 +473,15 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
   <div class="modal" style="max-width:400px">
     <div class="modal-head"><h2>Mark Breakdown As Resolved</h2><button class="modal-close" onclick="closeModal('resolveBreakdownModal')">&#10005;</button></div>
     <p id="rbDescText" style="font-size:13px;color:var(--text2);margin-bottom:16px">Mark the breakdown as resolved. The accumulated downtime (Mon-Fri, 7am-8pm) is calculated below, but can be overridden if required.</p>
+    <input type="hidden" id="rbFaultId">
     <div class="form-row">
-      <div class="form-group"><label>Your Name <span style="color:var(--red)">*</span></label><input id="rbUser" placeholder="Required to confirm"></div>
+      <div class="form-group"><label>Category</label><select id="rbCategory"></select></div>
+      <div class="form-group"><label>Severity</label><select id="rbSeverity"></select></div>
+    </div>
+    <div class="form-group"><label>Description</label><textarea id="rbDesc" style="min-height:56px"></textarea></div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <div class="form-row">
+      <div class="form-group"><label>Resolved By <span style="color:var(--red)">*</span></label><input id="rbUser" placeholder="Required to confirm"></div>
       <div class="form-group">
         <label>Downtime (h) <span id="rbDowntimeLabel" style="font-weight:normal;color:var(--text3);margin-left:4px"></span></label>
         <input id="rbDowntime" type="number" step="0.01" placeholder="Calculating&hellip;" oninput="updateDowntimeLabel()">
@@ -498,8 +526,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 <!-- CONCESSION MODAL -->
 <div class="modal-overlay" id="concessionModal">
   <div class="modal" style="max-width:400px">
-    <div class="modal-head"><h2>Add Concession / Restriction</h2><button class="modal-close" onclick="closeModal('concessionModal')">&#10005;</button></div>
+    <div class="modal-head"><h2 id="concessionModalTitle">Add Concession / Restriction</h2><button class="modal-close" onclick="closeModal('concessionModal')">&#10005;</button></div>
     <input type="hidden" id="concessionMachine">
+    <input type="hidden" id="concessionId">
     <div class="form-group"><label>Type</label><select id="concessionType"><option>Restriction</option><option>Concession</option></select></div>
     <div class="form-group"><label>Description</label><textarea id="concessionDesc" placeholder="e.g. No electrons, or OK to use with output &lt;3%"></textarea></div>
     <div class="form-row">
@@ -593,7 +622,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div style="text-align:center;padding:10px 0 20px">
       <div style="font-size:42px;margin-bottom:12px;color:var(--blue);line-height:1">&#9762;</div>
       <h3 style="font-size:18px;font-weight:600;margin-bottom:4px;letter-spacing:-0.02em">LiveViewRT</h3>
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.0</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.1</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3)">April 2026</p>
     </div>
@@ -643,12 +672,28 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
   </div>
 </div>
 
+<!-- EDIT AUDIT MODAL -->
+<div class="modal-overlay" id="editAuditModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head"><h2 id="editAuditTitle">Edit Log Entry</h2><button class="modal-close" onclick="closeModal('editAuditModal')">&#10005;</button></div>
+    <input type="hidden" id="editAuditId">
+    <input type="hidden" id="editAuditType">
+    <input type="hidden" id="editAuditSourceId">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Modifying this entry will automatically update its original underlying data.</p>
+    <div id="editAuditDynamicFields"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('editAuditModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditAudit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- DELETE AUDIT MODAL -->
 <div class="modal-overlay" id="deleteAuditModal">
   <div class="modal" style="max-width:400px">
     <div class="modal-head"><h2>Delete Log Entry</h2><button class="modal-close" onclick="closeModal('deleteAuditModal')">&#10005;</button></div>
     <input type="hidden" id="deleteAuditId">
-    <p style="font-size:13px;color:var(--text);margin-bottom:16px">Are you sure you want to permanently delete this log entry? <strong>This action cannot be undone.</strong></p>
+    <p id="deleteAuditWarning" style="font-size:13px;color:var(--text);margin-bottom:16px">Are you sure you want to permanently delete this log entry? <strong>This action cannot be undone.</strong></p>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('deleteAuditModal')">Cancel</button>
       <button class="btn btn-danger" onclick="executeDeleteAudit()">Delete</button>
@@ -689,7 +734,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 <div id="toast"></div>
 
 <script>
-const WS_URL=`ws://${location.host}`,API='/api';
+const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL=`${wsProtocol}//${location.host}`,API='/api';
 let state={machines:[],activity:[],faults:[],concessions:[],settings:{}}, breakdownStartTime = null;
 let bdTimeCache = {};
 function getBdTime(m) {
@@ -809,17 +855,53 @@ function renderConfigMachines() {
 function buildDropdowns() {
   const cats = state.settings?.fault_categories ? JSON.parse(state.settings.fault_categories) : ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'];
   const sevs = state.settings?.fault_severities ? JSON.parse(state.settings.fault_severities) : ['Low','Medium','High','Critical'];
+  const acts = state.settings?.activity_categories ? JSON.parse(state.settings.activity_categories) : ['Treatment session','QA check','Service','Calibration','Inspection','Status change','Other'];
+
+  const defCat = state.settings?.default_fault_category || 'Other';
+  const defSev = state.settings?.default_fault_severity || 'Low';
+  const defAct = state.settings?.default_activity_category || 'Treatment session';
+
   const catEl = document.getElementById('faultCategory');
   if(catEl) {
     const cur = catEl.value;
     catEl.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
-    if(cats.includes(cur)) catEl.value = cur;
+    if(cats.includes(cur)) catEl.value = cur; else catEl.value = defCat;
+  }
+  const rCatEl = document.getElementById('resolveCategory');
+  if(rCatEl) {
+    const cur = rCatEl.value;
+    rCatEl.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+    if(cats.includes(cur)) rCatEl.value = cur; else rCatEl.value = defCat;
+  }
+  const rbCatEl = document.getElementById('rbCategory');
+  if(rbCatEl) {
+    const cur = rbCatEl.value;
+    rbCatEl.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+    if(cats.includes(cur)) rbCatEl.value = cur; else rbCatEl.value = defCat;
   }
   const sevEl = document.getElementById('faultSeverity');
   if(sevEl) {
     const cur = sevEl.value;
     sevEl.innerHTML = sevs.map(s => `<option value="${s}">${s}</option>`).join('');
-    if(sevs.includes(cur)) sevEl.value = cur;
+    if(sevs.includes(cur)) sevEl.value = cur; else sevEl.value = defSev;
+  }
+  const rSevEl = document.getElementById('resolveSeverity');
+  if(rSevEl) {
+    const cur = rSevEl.value;
+    rSevEl.innerHTML = sevs.map(s => `<option value="${s}">${s}</option>`).join('');
+    if(sevs.includes(cur)) rSevEl.value = cur; else rSevEl.value = defSev;
+  }
+  const rbSevEl = document.getElementById('rbSeverity');
+  if(rbSevEl) {
+    const cur = rbSevEl.value;
+    rbSevEl.innerHTML = sevs.map(s => `<option value="${s}">${s}</option>`).join('');
+    if(sevs.includes(cur)) rbSevEl.value = cur; else rbSevEl.value = defSev;
+  }
+  const actEl = document.getElementById('logActivity');
+  if(actEl) {
+    const cur = actEl.value;
+    actEl.innerHTML = acts.map(c => `<option value="${c}">${c}</option>`).join('');
+    if(acts.includes(cur)) actEl.value = cur; else actEl.value = defAct;
   }
   const filterSevEl = document.getElementById('faultFilterSeverity');
   if(filterSevEl) {
@@ -830,12 +912,14 @@ function buildDropdowns() {
 }
 
 function populateSettings(){
-  const s = state.settings?.clinical_start || '7';
-  const e = state.settings?.clinical_end || '20';
+  let s = state.settings?.clinical_start || '07:00';
+  if (!s.includes(':')) s = s.padStart(2, '0') + ':00';
+  let e = state.settings?.clinical_end || '20:00';
+  if (!e.includes(':')) e = e.padStart(2, '0') + ':00';
   if(document.getElementById('cfgStart')) document.getElementById('cfgStart').value = s;
   if(document.getElementById('cfgEnd')) document.getElementById('cfgEnd').value = e;
-  if(document.getElementById('rbDescText')) document.getElementById('rbDescText').innerHTML = `Mark the breakdown as resolved. The accumulated downtime (Mon-Fri, ${s}:00-${e}:00) is calculated below, but can be overridden if required.`;
-  if(document.getElementById('rbApplyClinicalLabel')) document.getElementById('rbApplyClinicalLabel').innerHTML = `Apply clinical hours (Mon-Fri, ${s}:00-${e}:00)`;
+  if(document.getElementById('rbDescText')) document.getElementById('rbDescText').innerHTML = `Mark the breakdown as resolved. The accumulated downtime (Mon-Fri, ${s}-${e}) is calculated below, but can be overridden if required.`;
+  if(document.getElementById('rbApplyClinicalLabel')) document.getElementById('rbApplyClinicalLabel').innerHTML = `Apply clinical hours (Mon-Fri, ${s}-${e})`;
   
   if(document.getElementById('cfgAdminPwdEnabled')) document.getElementById('cfgAdminPwdEnabled').checked = state.settings?.admin_pwd_enabled === '1';
   if(document.getElementById('cfgAdminPwd')) document.getElementById('cfgAdminPwd').value = state.settings?.admin_pwd || 'admin';
@@ -846,24 +930,38 @@ function populateSettings(){
 function renderSettingsLists() {
   const cats = state.settings?.fault_categories ? JSON.parse(state.settings.fault_categories) : ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'];
   const sevs = state.settings?.fault_severities ? JSON.parse(state.settings.fault_severities) : ['Low','Medium','High','Critical'];
+  const acts = state.settings?.activity_categories ? JSON.parse(state.settings.activity_categories) : ['Treatment session','QA check','Service','Calibration','Inspection','Status change','Other'];
+
+  const defCat = state.settings?.default_fault_category || 'Other';
+  const defSev = state.settings?.default_fault_severity || 'Low';
+  const defAct = state.settings?.default_activity_category || 'Treatment session';
+
   const catList = document.getElementById('cfgCatList');
   if(catList) {
-    catList.innerHTML = cats.map((c, i) => `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border)"><span style="font-size:13px">${c}</span><div style="display:flex;gap:4px"><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('fault_categories', ${i}, -1)" ${i===0?'disabled style="opacity:0.5"':''}>&#8593;</button><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('fault_categories', ${i}, 1)" ${i===cats.length-1?'disabled style="opacity:0.5"':''}>&#8595;</button><button class="btn btn-sm btn-danger" style="padding:2px 6px;margin-left:4px" onclick="removeSettingItem('fault_categories', '${c.replace(/'/g, "\\'")}')" title="Delete">&#10005;</button></div></div>`).join('');
+    catList.innerHTML = cats.map((c, i) => `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border)"><span style="font-size:13px">${c} ${c === defCat ? '<span class="tag" style="color:var(--green);border-color:var(--green-border);background:var(--green-bg);margin-left:4px;padding:1px 5px;font-size:9px">Default</span>' : ''}</span><div style="display:flex;gap:4px"><button class="btn btn-sm" style="padding:2px 6px" onclick="setDefaultSettingItem('default_fault_category', '${c.replace(/'/g, "\\'")}')" title="Set Default" ${c === defCat ? 'disabled style="opacity:0.5"' : ''}>&#10003;</button><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('fault_categories', ${i}, -1)" ${i===0?'disabled style="opacity:0.5"':''}>&#8593;</button><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('fault_categories', ${i}, 1)" ${i===cats.length-1?'disabled style="opacity:0.5"':''}>&#8595;</button><button class="btn btn-sm btn-danger" style="padding:2px 6px;margin-left:4px" onclick="removeSettingItem('fault_categories', '${c.replace(/'/g, "\\'")}')" title="Delete">&#10005;</button></div></div>`).join('');
   }
   const sevList = document.getElementById('cfgSevList');
   if(sevList) {
-    sevList.innerHTML = sevs.map((s, i) => `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border)"><span style="font-size:13px">${s}</span><div style="display:flex;gap:4px"><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('fault_severities', ${i}, -1)" ${i===0?'disabled style="opacity:0.5"':''}>&#8593;</button><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('fault_severities', ${i}, 1)" ${i===sevs.length-1?'disabled style="opacity:0.5"':''}>&#8595;</button><button class="btn btn-sm btn-danger" style="padding:2px 6px;margin-left:4px" onclick="removeSettingItem('fault_severities', '${s.replace(/'/g, "\\'")}')" title="Delete">&#10005;</button></div></div>`).join('');
+    sevList.innerHTML = sevs.map((s, i) => `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border)"><span style="font-size:13px">${s} ${s === defSev ? '<span class="tag" style="color:var(--green);border-color:var(--green-border);background:var(--green-bg);margin-left:4px;padding:1px 5px;font-size:9px">Default</span>' : ''}</span><div style="display:flex;gap:4px"><button class="btn btn-sm" style="padding:2px 6px" onclick="setDefaultSettingItem('default_fault_severity', '${s.replace(/'/g, "\\'")}')" title="Set Default" ${s === defSev ? 'disabled style="opacity:0.5"' : ''}>&#10003;</button><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('fault_severities', ${i}, -1)" ${i===0?'disabled style="opacity:0.5"':''}>&#8593;</button><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('fault_severities', ${i}, 1)" ${i===sevs.length-1?'disabled style="opacity:0.5"':''}>&#8595;</button><button class="btn btn-sm btn-danger" style="padding:2px 6px;margin-left:4px" onclick="removeSettingItem('fault_severities', '${s.replace(/'/g, "\\'")}')" title="Delete">&#10005;</button></div></div>`).join('');
+  }
+  const actList = document.getElementById('cfgActList');
+  if(actList) {
+    actList.innerHTML = acts.map((c, i) => `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border)"><span style="font-size:13px">${c} ${c === defAct ? '<span class="tag" style="color:var(--green);border-color:var(--green-border);background:var(--green-bg);margin-left:4px;padding:1px 5px;font-size:9px">Default</span>' : ''}</span><div style="display:flex;gap:4px"><button class="btn btn-sm" style="padding:2px 6px" onclick="setDefaultSettingItem('default_activity_category', '${c.replace(/'/g, "\\'")}')" title="Set Default" ${c === defAct ? 'disabled style="opacity:0.5"' : ''}>&#10003;</button><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('activity_categories', ${i}, -1)" ${i===0?'disabled style="opacity:0.5"':''}>&#8593;</button><button class="btn btn-sm" style="padding:2px 6px" onclick="moveSettingItem('activity_categories', ${i}, 1)" ${i===acts.length-1?'disabled style="opacity:0.5"':''}>&#8595;</button><button class="btn btn-sm btn-danger" style="padding:2px 6px;margin-left:4px" onclick="removeSettingItem('activity_categories', '${c.replace(/'/g, "\\'")}')" title="Delete">&#10005;</button></div></div>`).join('');
   }
 }
 
 async function addSettingItem(key, inputId) {
   const val = document.getElementById(inputId).value.trim();
   if(!val) return;
-  let arr = state.settings[key] ? JSON.parse(state.settings[key]) : (key === 'fault_categories' ? ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'] : ['Low','Medium','High','Critical']);
+  let arr = state.settings[key] ? JSON.parse(state.settings[key]) : (key === 'fault_categories' ? ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'] : key === 'fault_severities' ? ['Low','Medium','High','Critical'] : ['Treatment session','QA check','Service','Calibration','Inspection','Status change','Other']);
   if(arr.includes(val)) return;
   arr.push(val);
   await api('PATCH', '/settings', { [key]: JSON.stringify(arr) });
   document.getElementById(inputId).value = '';
+}
+
+async function setDefaultSettingItem(key, val) {
+  await api('PATCH', '/settings', { [key]: val });
 }
 
 function removeSettingItem(key, valToRemove) {
@@ -876,7 +974,7 @@ function removeSettingItem(key, valToRemove) {
 async function executeDeleteSettingItem() {
   const key = document.getElementById('deleteSettingItemKey').value;
   const valToRemove = document.getElementById('deleteSettingItemValue').value;
-  let arr = state.settings[key] ? JSON.parse(state.settings[key]) : (key === 'fault_categories' ? ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'] : ['Low','Medium','High','Critical']);
+  let arr = state.settings[key] ? JSON.parse(state.settings[key]) : (key === 'fault_categories' ? ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'] : key === 'fault_severities' ? ['Low','Medium','High','Critical'] : ['Treatment session','QA check','Service','Calibration','Inspection','Status change','Other']);
   arr = arr.filter(v => v !== valToRemove);
   const res = await api('PATCH', '/settings', { [key]: JSON.stringify(arr) });
   closeModal('deleteSettingItemModal');
@@ -886,7 +984,7 @@ async function executeDeleteSettingItem() {
 }
 
 async function moveSettingItem(key, index, direction) {
-  let arr = state.settings[key] ? JSON.parse(state.settings[key]) : (key === 'fault_categories' ? ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'] : ['Low','Medium','High','Critical']);
+  let arr = state.settings[key] ? JSON.parse(state.settings[key]) : (key === 'fault_categories' ? ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'] : key === 'fault_severities' ? ['Low','Medium','High','Critical'] : ['Treatment session','QA check','Service','Calibration','Inspection','Status change','Other']);
   if (direction === -1 && index > 0) {
     [arr[index - 1], arr[index]] = [arr[index], arr[index - 1]];
   } else if (direction === 1 && index < arr.length - 1) {
@@ -905,7 +1003,7 @@ function refreshOverview(){
     const openFaults=state.faults.filter(f=>f.machine_id===m.id&&f.status==='open');
     const mConcessions=state.concessions.filter(c=>c.machine_id===m.id&&c.active===1);
     const recentFaults=state.faults.filter(f=>f.machine_id===m.id&&new Date((f.created_at||'').replace(' ','T')+'Z')>=thirtyDaysAgo);
-    const bdCount=recentFaults.filter(f=>f.severity.includes('High')||f.severity.includes('Critical')).length;
+    const bdCount=recentFaults.filter(f=>(f.severity&&(f.severity.includes('High')||f.severity.includes('Critical')))||f.downtime_hrs>0).length;
     const recentDt=recentFaults.reduce((s,f)=>s+Number(f.downtime_hrs||0),0);
     const upPct=Math.max(0,Math.min(100,100-(recentDt/getTotalWorkingHours(30)*100))).toFixed(0);
     const upColor=upPct>90?'var(--green)':upPct>75?'var(--amber)':'var(--red)';
@@ -915,7 +1013,7 @@ function refreshOverview(){
       ${mConcessions.length?`<div class="alert ${mConcessions.some(c=>c.type==='Restriction')?'alert-red':'alert-amber'}" style="margin-bottom:8px;font-size:11px;padding:6px 10px">&#9888; ${mConcessions.length} active concession/restriction${mConcessions.length>1?'s':''}</div>`:''}
       ${openFaults.length?`<div class="alert alert-amber" style="margin-bottom:8px;font-size:11px">&#9888; ${openFaults.length} open fault${openFaults.length>1?'s':''}</div>`:''}
       <div class="mc-card-stats">
-        <div class="mc-mini"><div class="mc-mini-val">${recentFaults.length}</div><div class="mc-mini-lbl">30-day faults</div></div>
+        <div class="mc-mini"><div class="mc-mini-val" style="color:${recentFaults.length>0?'var(--text)':'var(--green)'}">${recentFaults.length}</div><div class="mc-mini-lbl">30-day faults</div></div>
         <div class="mc-mini"><div class="mc-mini-val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="mc-mini-lbl">30-day breakdowns</div></div>
       </div>
       <div class="uptime-bar"><div class="uptime-fill" style="width:${upPct}%;background:${upColor}"></div></div>
@@ -942,13 +1040,14 @@ function refreshMachinePage(machineId){
   const bdHtml=(bdStart&&bdStart!=='loading')?`<span class="bd-timer" data-start="${bdStart}" style="margin-left:4px;font-family:var(--mono)"></span>`:'';
   const mActivity=state.activity.filter(a=>a.machine_id===machineId);
   const mFaults=state.faults.filter(f=>f.machine_id===machineId);
+  const mBreakdowns=mFaults.filter(f=>(f.severity&&(f.severity.includes('High')||f.severity.includes('Critical')))||f.downtime_hrs>0);
   const openFaults=mFaults.filter(f=>f.status==='open');
   const mConcessions=state.concessions.filter(c=>c.machine_id===m.id&&c.active===1);
   const thirtyDaysAgo=new Date();thirtyDaysAgo.setDate(thirtyDaysAgo.getDate()-30);
   const recentFaults=mFaults.filter(f=>new Date((f.created_at||'').replace(' ','T')+'Z')>=thirtyDaysAgo);
   const recentDt=recentFaults.reduce((s,f)=>s+Number(f.downtime_hrs||0),0);
   const potentialHrs=getTotalWorkingHours(30);
-  const bdCount=recentFaults.filter(f=>f.severity.includes('High')||f.severity.includes('Critical')).length;
+  const bdCount=recentFaults.filter(f=>(f.severity&&(f.severity.includes('High')||f.severity.includes('Critical')))||f.downtime_hrs>0).length;
   const upPct=Math.max(0,Math.min(100,100-(recentDt/potentialHrs*100))).toFixed(0);
   const statusBtns=STATUS_OPTS.map(o=>{const dis=m.status==='breakdown'||(!m.power&&['available','qa'].includes(o.id));return`<button class="stat-btn ${o.id===m.status?'current':''}" data-s="${o.id}" ${dis?'disabled style="opacity:0.5;cursor:not-allowed"':''} onclick="requestStatusChange('${machineId}','${o.id}')">${o.label}</button>`}).join('');
   const concessionsHtml=mConcessions.map(c=>{
@@ -956,7 +1055,7 @@ function refreshMachinePage(machineId){
     const revHtml=c.review_by?`<span style="margin-left:8px;font-size:11px;opacity:0.9;${isOverdue?'color:var(--red);font-weight:bold;':''}"><span style="margin-right:3px">&#8987;</span>Review by ${fmtD(c.review_by)}${isOverdue?' (OVERDUE)':''}</span>`:'';
     return `<div class="alert ${c.type==='Restriction'?'alert-red':'alert-amber'}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;margin-bottom:8px;box-shadow:var(--shadow-sm)">
       <div><strong style="text-transform:uppercase">${c.type}:</strong> ${c.description} <span style="opacity:0.7;font-weight:normal;margin-left:4px">(${c.user_name})</span>${revHtml}</div>
-      <button class="btn btn-sm" style="background:transparent;border-color:currentColor;color:inherit;padding:2px 8px" onclick="removeConcession(${c.id})">Remove</button>
+      <div style="flex-shrink:0"><button class="btn btn-sm" style="background:transparent;border-color:currentColor;color:inherit;padding:2px 8px;margin-right:4px" onclick="editConcession(${c.id})">Edit</button><button class="btn btn-sm" style="background:transparent;border-color:currentColor;color:inherit;padding:2px 8px" onclick="removeConcession(${c.id})">Remove</button></div>
     </div>`}).join('');
   let actionBtn = '';
   if (m.status === 'breakdown') {
@@ -996,6 +1095,7 @@ function refreshMachinePage(machineId){
     <div class="tabs">
       <button class="tab active" onclick="switchMTab(this,'mt-log-${machineId}')">Activity Log</button>
       <button class="tab" onclick="switchMTab(this,'mt-faults-${machineId}')">Faults (${mFaults.length})</button>
+      <button class="tab" onclick="switchMTab(this,'mt-breakdowns-${machineId}')">Breakdowns (${mBreakdowns.length})</button>
       <button class="tab" onclick="switchMTab(this,'mt-info-${machineId}')">Machine Info</button>
     </div>
     <div id="mt-log-${machineId}" class="tab-pane active">
@@ -1010,6 +1110,10 @@ function refreshMachinePage(machineId){
       <div class="section-hd"><span>Fault History</span><button class="btn btn-sm btn-danger" onclick="openFaultFor('${machineId}')">+ Report Fault</button></div>
       ${mFaults.length?mFaults.map(f=>faultRowHTML(f,false)).join(''):'<div class="empty">No faults recorded</div>'}
     </div>
+    <div id="mt-breakdowns-${machineId}" class="tab-pane">
+      <div class="section-hd"><span>Breakdown History</span></div>
+      ${mBreakdowns.length?mBreakdowns.map(f=>faultRowHTML(f,false)).join(''):'<div class="empty">No breakdowns recorded</div>'}
+    </div>
     <div id="mt-info-${machineId}" class="tab-pane">
       <div class="card"><div class="card-head">Machine Specifications</div><div class="card-body">
         <table style="width:100%;font-size:13px;border-collapse:collapse">
@@ -1020,16 +1124,18 @@ function refreshMachinePage(machineId){
 }
 
 function faultRowHTML(f,showMachine){
-  const open=f.status==='open',sevColor=f.severity.includes('High')||f.severity.includes('Critical')?'var(--red)':f.severity.includes('Medium')?'var(--amber)':'var(--blue)';
+  const m=state.machines.find(x=>x.id===f.machine_id);
+  const isBreakdown=f.severity.includes('High')||f.severity.includes('Critical')||(m&&m.status==='breakdown'&&f.status==='open');
+  const open=f.status==='open',sevColor=isBreakdown?'var(--red)':f.severity.includes('Medium')?'var(--amber)':'var(--blue)';
   return`<div class="fault-row">
     <div class="fault-icon" style="background:${open?'var(--red-bg)':'var(--green-bg)'};color:${open?'var(--red)':'var(--green)'}">${open?'&#9888;':'&#10003;'}</div>
     <div class="fault-info"><h4>${showMachine?`<span class="tag">${f.machine_name||f.machine_id}</span> &nbsp;`:''}${f.category} <span style="color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px">${f.severity}</span></h4>
     <p>${f.description}</p>
-    <div style="margin-top:5px;font-size:11px;color:var(--text3)">${f.user_name} (${f.user_role}) &middot; ${fmtD(f.created_at)}${f.resolved_at?` &middot; Acknowledged by ${f.resolved_by} on ${fmtD(f.resolved_at)}${f.downtime_hrs ? ` &middot; ${Number(f.downtime_hrs).toFixed(2)}h downtime` : ''}`:''}</div>
+    <div style="margin-top:5px;font-size:11px;color:var(--text3)">${f.user_name} (${f.user_role}) &middot; ${fmtD(f.created_at)}${f.resolved_at?` &middot; ${isBreakdown?'Resolved':'Acknowledged'} by ${f.resolved_by} on ${fmtD(f.resolved_at)}${f.downtime_hrs ? ` &middot; ${Number(f.downtime_hrs).toFixed(2)}h downtime` : ''}`:''}</div>
     </div>
     <div class="fault-meta" style="display:flex;align-items:center;gap:10px">
-      <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:${open?'var(--red)':'var(--green)'}">${open?'OPEN':'ACKNOWLEDGED'}</span>
-      ${open?`<button class="btn btn-success btn-sm" onclick="openResolve(${f.id})">Acknowledge</button>`:''}
+      <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:${open?'var(--red)':'var(--green)'}">${open?'OPEN':(isBreakdown?'RESOLVED':'ACKNOWLEDGED')}</span>
+      ${open?`<button class="btn btn-success btn-sm" onclick="openResolve(${f.id})">${isBreakdown?'Resolve':'Acknowledge'}</button>`:''}
       ${showMachine?`<button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="deleteFaultRecord(${f.id})" title="Delete Fault">&#10005;</button>`:''}
     </div>
   </div>`;
@@ -1118,8 +1224,22 @@ function confirmStatusChange(){
   closeModal('statusConfirmModal');pendingStatus=null;
 }
 
-function openLogFor(machineId){document.getElementById('logMachine').value=machineId;openModal('logModal')}
-function openFaultFor(machineId){document.getElementById('faultMachine').value=machineId;openModal('faultModal')}
+function openLogFor(machineId){
+  document.getElementById('logMachine').value=machineId;
+  document.getElementById('logActivity').value=state.settings?.default_activity_category||'Treatment session';
+  document.getElementById('logNotes').value='';
+  openModal('logModal');
+  setTimeout(()=>document.getElementById('logNotes').focus(),100);
+}
+function openFaultFor(machineId){
+  document.getElementById('faultMachine').value=machineId;
+  document.getElementById('faultCategory').value=state.settings?.default_fault_category||'Other';
+  document.getElementById('faultSeverity').value=state.settings?.default_fault_severity||'Low';
+  document.getElementById('faultStatusChange').value='';
+  document.getElementById('faultDesc').value='';
+  openModal('faultModal');
+  setTimeout(()=>document.getElementById('faultDesc').focus(),100);
+}
 
 async function submitLog(){
   const body={machine_id:document.getElementById('logMachine').value,user_name:document.getElementById('logUser').value.trim(),user_role:document.getElementById('logRole').value,activity:document.getElementById('logActivity').value,notes:document.getElementById('logNotes').value.trim()};
@@ -1133,19 +1253,71 @@ async function submitFault(){
   await api('POST','/faults',body);closeModal('faultModal');
   document.getElementById('faultUser').value='';document.getElementById('faultDesc').value='';toast('Fault reported','error');
 }
-function openResolve(faultId){document.getElementById('resolveFaultId').value=faultId;document.getElementById('resolveUser').value='';openModal('resolveModal')}
+function openResolve(faultId){
+  const f=state.faults.find(x=>x.id===faultId);
+  const m=f?state.machines.find(x=>x.id===f.machine_id):null;
+  if(f && (f.severity.includes('High')||f.severity.includes('Critical')||(m&&m.status==='breakdown'))) {
+    requestBreakdownResolve(f.machine_id, faultId);
+    return;
+  }
+  document.getElementById('resolveFaultId').value=faultId;
+  document.getElementById('resolveUser').value='';
+  const titleEl=document.querySelector('#resolveModal .modal-head h2');
+  if(titleEl)titleEl.textContent='Acknowledge Fault';
+  const labelEl=document.getElementById('resolveUserLabel');
+  if(labelEl)labelEl.innerHTML='Acknowledged By <span style="color:var(--red)">*</span>';
+  const btnEl=document.querySelector('#resolveModal .btn-success');
+  if(btnEl)btnEl.textContent='Acknowledge';
+  
+  if(f) {
+    document.getElementById('resolveCategory').value = f.category;
+    document.getElementById('resolveSeverity').value = f.severity;
+    document.getElementById('resolveDesc').value = f.description;
+  }
+  
+  openModal('resolveModal');
+}
 async function submitResolve(){
   const resolved_by=document.getElementById('resolveUser').value.trim();
   if(!resolved_by){toast('Please enter your name','error');return}
-  await api('PATCH',`/faults/${document.getElementById('resolveFaultId').value}/resolve`,{resolved_by});
-  closeModal('resolveModal');toast('Fault acknowledged','success');
+  const category=document.getElementById('resolveCategory').value;
+  const severity=document.getElementById('resolveSeverity').value;
+  const description=document.getElementById('resolveDesc').value.trim();
+  if(!description){toast('Description required','error');return}
+  await api('PATCH',`/faults/${document.getElementById('resolveFaultId').value}/resolve`,{resolved_by, category, severity, description});
+  const f=state.faults.find(x=>x.id===parseInt(document.getElementById('resolveFaultId').value));
+  const isBreakdown=f&&(f.severity.includes('High')||f.severity.includes('Critical'));
+  closeModal('resolveModal');toast(isBreakdown?'Breakdown resolved':'Fault acknowledged','success');
 }
 
-function openConcessionFor(machineId){document.getElementById('concessionMachine').value=machineId;document.getElementById('concessionDesc').value='';document.getElementById('concessionUser').value='';document.getElementById('concessionReviewBy').value='';openModal('concessionModal');setTimeout(()=>document.getElementById('concessionDesc').focus(),100);}
+function openConcessionFor(machineId){
+  document.getElementById('concessionModalTitle').textContent='Add Concession / Restriction';
+  document.getElementById('concessionId').value='';
+  document.getElementById('concessionMachine').value=machineId;
+  document.getElementById('concessionDesc').value='';
+  document.getElementById('concessionUser').value='';
+  document.getElementById('concessionReviewBy').value='';
+  openModal('concessionModal');setTimeout(()=>document.getElementById('concessionDesc').focus(),100);
+}
+function editConcession(id){
+  const c = state.concessions.find(x => x.id === id);
+  if(!c) return;
+  document.getElementById('concessionModalTitle').textContent='Edit Concession / Restriction';
+  document.getElementById('concessionId').value=id;
+  document.getElementById('concessionMachine').value=c.machine_id;
+  document.getElementById('concessionType').value=c.type;
+  document.getElementById('concessionDesc').value=c.description;
+  document.getElementById('concessionUser').value=c.user_name;
+  document.getElementById('concessionReviewBy').value=c.review_by || '';
+  openModal('concessionModal');setTimeout(()=>document.getElementById('concessionDesc').focus(),100);
+}
 async function submitConcession(){
+  const id = document.getElementById('concessionId').value;
   const body={machine_id:document.getElementById('concessionMachine').value,type:document.getElementById('concessionType').value,description:document.getElementById('concessionDesc').value.trim(),user_name:document.getElementById('concessionUser').value.trim(),review_by:document.getElementById('concessionReviewBy').value||null};
   if(!body.description||!body.user_name){toast('Description and Name required','error');return}
-  await api('POST','/concessions',body);closeModal('concessionModal');toast('Concession added','success');
+  if(id) { await api('PUT',`/concessions/${id}`,body); toast('Concession updated','success'); }
+  else { await api('POST','/concessions',body); toast('Concession added','success'); }
+  closeModal('concessionModal');
 }
 function removeConcession(id){
   document.getElementById('removeConcessionId').value=id;
@@ -1270,6 +1442,10 @@ function confirmServerBackupOverwrite() {
   createServerBackup(true);
 }
 
+function downloadConfigOnly() {
+  window.location.href = '/api/backup/download-config';
+}
+
 function downloadDatabase() {
   window.location.href = '/api/backup/download';
 }
@@ -1305,26 +1481,59 @@ async function confirmRestore() {
 }
 
 let pendingBreakdown=null;
-async function requestBreakdownResolve(machineId){
+async function requestBreakdownResolve(machineId, faultId = null){
   pendingBreakdown=machineId;breakdownStartTime=null;
   document.getElementById('rbUser').value='';document.getElementById('rbNotes').value='';document.getElementById('rbDowntime').value='';document.getElementById('rbDowntime').placeholder='Calculating...';
   document.getElementById('rbApplyClinicalHours').checked=true;
   const m=state.machines.find(x=>x.id===machineId);
-  document.getElementById('rbNextStatus').value=(m&&m.power)?'on':'offline';
+  let defaultStatus = m.status;
+  if (m.status === 'breakdown') defaultStatus = m.power ? 'available' : 'offline';
+  if (!['available','qa','service','on','offline'].includes(defaultStatus)) defaultStatus = 'available';
+  document.getElementById('rbNextStatus').value=defaultStatus;
+  
+  let f = null;
+  if (faultId) {
+    f = state.faults.find(x=>x.id===faultId);
+  } else {
+    f = state.faults.find(x=>x.machine_id===machineId && x.status==='open' && (x.severity.includes('High') || x.severity.includes('Critical') || m.status === 'breakdown'));
+  }
+  if (f) {
+    document.getElementById('rbCategory').value = f.category;
+    document.getElementById('rbSeverity').value = f.severity;
+    document.getElementById('rbDesc').value = f.description;
+    document.getElementById('rbFaultId').value = f.id;
+  } else {
+    document.getElementById('rbCategory').value = state.settings?.default_fault_category || 'Other';
+    document.getElementById('rbSeverity').value = 'High';
+    document.getElementById('rbDesc').value = 'Breakdown downtime log (machine was placed in breakdown without an open fault).';
+    document.getElementById('rbFaultId').value = '';
+  }
   openModal('resolveBreakdownModal');setTimeout(()=>document.getElementById('rbUser').focus(),100);
   const res=await api('GET',`/machines/${machineId}/breakdown-time`);
   if(res&&res.startTime){
     breakdownStartTime=res.startTime;
     recalculateBreakdownTime();
   }else{
-    document.getElementById('rbDowntime').value='0.00';
-    document.getElementById('rbDowntime').placeholder='Error';
+    if (f && f.created_at) {
+       breakdownStartTime = f.created_at.replace(' ', 'T') + 'Z';
+       recalculateBreakdownTime();
+    } else {
+       document.getElementById('rbDowntime').value='0.00';
+       document.getElementById('rbDowntime').placeholder='Error';
+    }
   }
 }
 async function confirmBreakdownResolve(){
   const user=document.getElementById('rbUser').value.trim();if(!user){toast('Please enter your name','error');return}
   const nextStatus=document.getElementById('rbNextStatus').value;
-  await api('POST',`/machines/${pendingBreakdown}/resolve-breakdown`,{resolved_by:user,notes:document.getElementById('rbNotes').value.trim(),downtime_hrs:document.getElementById('rbDowntime').value, next_status:nextStatus});
+  const category=document.getElementById('rbCategory').value;
+  const severity=document.getElementById('rbSeverity').value;
+  const description=document.getElementById('rbDesc').value.trim();
+  const faultId=document.getElementById('rbFaultId').value;
+  await api('POST',`/machines/${pendingBreakdown}/resolve-breakdown`,{
+    resolved_by:user,notes:document.getElementById('rbNotes').value.trim(),downtime_hrs:document.getElementById('rbDowntime').value, 
+    next_status:nextStatus, category, severity, description, fault_id: faultId
+  });
   closeModal('resolveBreakdownModal');pendingBreakdown=null;breakdownStartTime=null;
 }
 function recalculateBreakdownTime(){
@@ -1376,11 +1585,24 @@ async function confirmTaskComplete() {
   pendingCompletion = null;
 }
 
+let dtExpanded = new Set();
 let dtSortCol = 'downtime_hrs', dtSortAsc = false;
+let bdSortCol = 'created_at', bdSortAsc = false;
 function sortDt(col) {
   if (dtSortCol === col) dtSortAsc = !dtSortAsc;
   else { dtSortCol = col; dtSortAsc = false; }
   renderDtTable();
+}
+function sortBd(col) {
+  if (bdSortCol === col) bdSortAsc = !bdSortAsc;
+  else { bdSortCol = col; bdSortAsc = false; }
+  renderDtTable();
+}
+function toggleDtDetails(mId) {
+  if (dtExpanded.has(mId)) dtExpanded.delete(mId);
+  else dtExpanded.add(mId);
+  const el = document.getElementById('dt-details-' + mId);
+  if (el) el.style.display = dtExpanded.has(mId) ? 'table-row' : 'none';
 }
 function renderDtTable() {
   if (!adminReport) return;
@@ -1396,7 +1618,34 @@ function renderDtTable() {
   if (tbody) tbody.innerHTML = arr.map(s => {
     const pct = (s.downtime_hrs / maxDt) * 100;
     const col = s.downtime_hrs > 10 ? 'var(--red)' : s.downtime_hrs > 5 ? 'var(--amber)' : 'var(--green)';
-    return `<tr><td style="font-weight:600;font-family:var(--mono);font-size:12px">${s.machine.name}</td><td style="color:var(--text3)">${s.machine.model}</td><td style="min-width:180px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:4px;transition:width 0.4s ease"></div></div><span style="font-family:var(--mono);color:${col};font-weight:500;min-width:45px;text-align:right">${s.downtime_hrs.toFixed(2)}h</span></div></td><td>${s.fault_count}</td><td>${s.breakdown_count}</td><td>${s.long_faults}</td></tr>`;
+      const breakdowns = adminReport.faults.filter(f => f.machine_id === s.machine.id && ((f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) || f.downtime_hrs > 0));
+    breakdowns.sort((a,b) => {
+      let valA = a[bdSortCol], valB = b[bdSortCol];
+      if (bdSortCol === 'downtime_hrs') { valA = Number(valA); valB = Number(valB); }
+      if (typeof valA === 'string') return bdSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      return bdSortAsc ? valA - valB : valB - valA;
+    });
+    let detailsHtml = '';
+    if (breakdowns.length > 0) {
+      detailsHtml = `<tr id="dt-details-${s.machine.id}" style="display:${dtExpanded.has(s.machine.id) ? 'table-row' : 'none'};background:var(--surface2)">
+        <td colspan="6" style="padding:12px 16px;border-bottom:1px solid var(--border)">
+          <div style="font-weight:600;margin-bottom:8px">Breakdown Details</div>
+          <table class="tbl" style="margin:0;background:var(--surface)">
+            <thead><tr><th style="cursor:pointer;user-select:none" onclick="sortBd('created_at')" title="Sort">Date &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortBd('category')" title="Sort">Category &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortBd('description')" title="Sort">Description &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortBd('user_name')" title="Sort">Reported By &#8597;</th><th style="cursor:pointer;user-select:none;text-align:right" onclick="sortBd('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th></tr></thead>
+            <tbody>
+              ${breakdowns.map(f => `<tr>
+                <td style="font-family:var(--mono);font-size:11px">${fmtDT(f.created_at)}</td>
+                <td>${f.category}</td>
+                <td style="color:var(--text2);max-width:300px;white-space:normal">${f.description}</td>
+                <td>${f.user_name}</td>
+                <td style="text-align:right;font-family:var(--mono);color:${f.downtime_hrs > 2 ? 'var(--red)' : 'var(--text)'}">${Number(f.downtime_hrs).toFixed(2)}h</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </td>
+      </tr>`;
+    }
+    return `<tr style="cursor:pointer" onclick="toggleDtDetails('${s.machine.id}')" title="Click to view breakdown details"><td style="font-weight:600;font-family:var(--mono);font-size:12px">${s.machine.name}</td><td style="color:var(--text3)">${s.machine.model}</td><td style="min-width:180px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:4px;transition:width 0.4s ease"></div></div><span style="font-family:var(--mono);color:${col};font-weight:500;min-width:45px;text-align:right">${s.downtime_hrs.toFixed(2)}h</span></div></td><td>${s.fault_count}</td><td>${s.breakdown_count}</td><td>${s.long_faults}</td></tr>${detailsHtml}`;
   }).join('');
 }
 
@@ -1572,6 +1821,78 @@ function makeInteractiveLineGraph(seriesData, monthLabels) {
   return `<div style="position:relative; margin-top:20px; border-top:1px solid var(--border); padding-top:20px">${svg}${legendHtml}</div>`;
 }
 
+let catChartMachine = 'all';
+let catChartType = 'bd';
+
+function renderCategoryCharts() {
+  const container = document.getElementById('categoryCharts');
+  if (!container || !adminReport) return;
+  
+  const machines = state.machines.filter(m => !m.archived);
+
+  let html = `<div class="card" style="width:100%; display:flex; flex-direction:column; padding:0; overflow:hidden">
+    <div class="card-head" style="margin-bottom:0; border-bottom:1px solid var(--border); padding:14px 16px; background:var(--surface)">
+      Category Analysis
+    </div>
+    <div style="display:flex; flex-wrap:wrap; align-items:stretch">
+      <div style="flex:0 0 220px; border-right:1px solid var(--border); padding:16px; background:var(--bg3)">
+        <div style="font-size:10px; font-weight:600; text-transform:uppercase; color:var(--text3); margin-bottom:8px; letter-spacing:0.05em; font-family:var(--mono)">Event Type</div>
+        <div style="display:flex; flex-direction:column; margin-bottom:20px">
+          <div id="catT-bd" class="cat-list-item ${catChartType==='bd'?'active':''}" onclick="setCatChartType('bd')">Breakdowns</div>
+          <div id="catT-faults" class="cat-list-item ${catChartType==='faults'?'active':''}" onclick="setCatChartType('faults')">All Faults</div>
+        </div>
+        <div style="font-size:10px; font-weight:600; text-transform:uppercase; color:var(--text3); margin-bottom:8px; letter-spacing:0.05em; font-family:var(--mono)">Machine</div>
+        <div style="display:flex; flex-direction:column; max-height:280px; overflow-y:auto; padding-right:4px">
+          <div id="catM-all" class="cat-list-item ${catChartMachine==='all'?'active':''}" onclick="setCatChartMachine('all')">All Machines</div>
+          ${machines.map(m => `<div id="catM-${m.id}" class="cat-list-item ${catChartMachine===m.id?'active':''}" onclick="setCatChartMachine('${m.id}')">${m.name}</div>`).join('')}
+        </div>
+      </div>
+      <div id="catChartBody" style="flex:1; padding:24px; min-height:280px; display:flex; align-items:center; justify-content:center; background:var(--surface)"></div>
+    </div>
+  </div>`;
+  
+  container.innerHTML = html;
+  updateCatChart();
+}
+
+function setCatChartType(type) { catChartType = type; document.querySelectorAll('[id^="catT-"]').forEach(el => el.classList.remove('active')); document.getElementById('catT-' + type).classList.add('active'); updateCatChart(); }
+function setCatChartMachine(mId) { catChartMachine = mId; document.querySelectorAll('[id^="catM-"]').forEach(el => el.classList.remove('active')); document.getElementById('catM-' + mId).classList.add('active'); updateCatChart(); }
+
+function updateCatChart() {
+  const body = document.getElementById('catChartBody');
+  if(!body || !adminReport) return;
+  
+  const colors = ['#1d4ed8', '#0d7f4f', '#b91c1c', '#92560a', '#6d28d9', '#0891b2', '#be123c', '#ea580c', '#4338ca', '#8b5cf6', '#14b8a6', '#f59e0b'];
+  const cats = state.settings?.fault_categories ? JSON.parse(state.settings.fault_categories) : ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'];
+  const catColors = {};
+  cats.forEach((c, i) => catColors[c] = colors[i % colors.length]);
+  
+  let faults = adminReport.faults;
+  if (catChartMachine !== 'all') faults = faults.filter(f => f.machine_id === catChartMachine);
+  if (catChartType === 'bd') faults = faults.filter(f => (f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) || f.downtime_hrs > 0);
+  
+  let tally = {};
+  faults.forEach(f => { const c = cats.includes(f.category) ? f.category : 'Other'; tally[c] = (tally[c] || 0) + 1; });
+  const data = Object.keys(tally).map(k => ({ label: k, value: tally[k], color: catColors[k] || '#94a3b8' })).filter(d => d.value > 0);
+  
+  body.innerHTML = makeDonutChart(data);
+}
+
+function makeDonutChart(data) {
+  if (!data || data.length === 0) return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;color:var(--text3);font-size:12px;text-align:center"><div style="opacity:0.6">No data recorded for this selection</div></div>`;
+  const total = data.reduce((s, d) => s + d.value, 0);
+  let svg = `<svg viewBox="0 0 36 36" style="width:100%;height:auto;max-width:280px;display:block;margin:0 auto;transform:rotate(-90deg);overflow:visible">`;
+  let offset = 100, legend = '';
+  data.sort((a,b) => b.value - a.value).forEach(d => {
+    const pct = (d.value / total) * 100, strokeDash = pct === 100 ? '100 0' : `${pct} ${100 - pct}`;
+    svg += `<circle cx="18" cy="18" r="15.9155" fill="none" stroke="${d.color}" stroke-width="4" stroke-dasharray="${strokeDash}" stroke-dashoffset="${offset}"><title>${d.label}: ${d.value} (${pct.toFixed(0)}%)</title></circle>`;
+    offset -= pct;
+    legend += `<div style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.3"><span style="width:14px;height:14px;border-radius:3px;background:${d.color};flex-shrink:0"></span><span style="flex:1;word-break:break-word" title="${d.label}">${d.label}</span><span style="font-size:14px;font-weight:600;font-family:var(--mono);color:var(--text)">${d.value}</span></div>`;
+  });
+  svg += `</svg>`;
+  return `<div style="display:flex;align-items:center;justify-content:center;gap:60px;width:100%;max-width:800px;margin:0 auto;flex-wrap:wrap"><div style="flex:1;min-width:200px;display:flex;justify-content:center">${svg}</div><div style="flex:1.5;min-width:220px;max-height:280px;overflow-y:auto;padding-right:12px">${legend}</div></div>`;
+}
+
 let adminReport=null;
 async function loadAdminData(){
   const days=document.getElementById('reportDays').value;
@@ -1640,16 +1961,37 @@ async function loadAdminData(){
   }
   const barW = (wb / last12Months.length) * 0.5;
   const gapB = (wb / last12Months.length);
+  const colors = ['#1d4ed8', '#0d7f4f', '#b91c1c', '#92560a', '#6d28d9', '#0891b2', '#be123c', '#ea580c', '#4338ca', '#8b5cf6', '#14b8a6', '#f59e0b'];
   last12Months.forEach((mKey, i) => {
       const mObj = faultsByMonth[mKey];
       const x = pLb + gapB * i + (gapB - barW) / 2;
-      const barH = (mObj.totalDt / maxMonthDt) * hb;
-      const y = pTb + hb - barH;
-      if (barH > 0) svgBar += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="var(--amber)" rx="3" ry="3"><title>${mObj.label}: ${mObj.totalDt.toFixed(1)}h</title></rect>`;
+      let currentY = pTb + hb;
+      let machineIndex = 0;
+      for (const mach of state.machines.filter(m=>!m.archived)) {
+          const machDt = mObj.machines[mach.id]?.dt || 0;
+          if (machDt > 0) {
+              const barH = (machDt / maxMonthDt) * hb;
+              const y = currentY - barH;
+              const color = colors[machineIndex % colors.length];
+              const pct = (machDt / mObj.totalDt * 100).toFixed(0);
+              svgBar += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${color}"><title>${mach.name} (${mObj.label}): ${pct}% (${machDt.toFixed(1)}h)</title></rect>`;
+              if (barH > 14) {
+                  svgBar += `<text x="${x + barW/2}" y="${y + barH/2 + 3}" fill="#fff" font-size="9" text-anchor="middle" font-family="var(--mono)" pointer-events="none">${mach.name}</text>`;
+              }
+              currentY -= barH;
+          }
+          machineIndex++;
+      }
       svgBar += `<text x="${x + barW/2}" y="${H_bar - 10}" text-anchor="middle" fill="var(--text3)">${mObj.label}</text>`;
   });
   svgBar += `</svg>`;
-  let monthlyBarChartHtml = `<div class="card" style="flex:2;min-width:450px"><div class="card-head" style="margin-bottom:12px">Monthly Downtime Summary (Last 12 Months)</div><div class="card-body" style="padding-top:0">${svgBar}</div></div>`;
+  let barLegendHtml = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;padding:0 16px;justify-content:center">`;
+  state.machines.filter(m=>!m.archived).forEach((mach, i) => {
+    const color = colors[i % colors.length];
+    barLegendHtml += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${color}"></span><span>${mach.name}</span></div>`;
+  });
+  barLegendHtml += `</div>`;
+  let monthlyBarChartHtml = `<div class="card" style="flex:2;min-width:450px"><div class="card-head" style="margin-bottom:12px">Monthly Downtime Summary (Last 12 Months)</div><div class="card-body" style="padding-top:0">${svgBar}${barLegendHtml}</div></div>`;
   
   let monthlyTableHtml = `<div class="card" style="flex:1;min-width:250px;padding:0;overflow:hidden;display:flex;flex-direction:column"><div class="card-head" style="padding-bottom:10px;border-bottom:1px solid var(--border)">Breakdowns by Month</div><div style="overflow-y:auto;max-height:280px"><table class="tbl"><thead><tr><th>Month</th><th>Downtime</th><th>&gt;2h</th></tr></thead><tbody>${[...last12Months].reverse().map(mKey => {
     const data = faultsByMonth[mKey];
@@ -1662,8 +2004,9 @@ async function loadAdminData(){
 
   adminReport.last12Months = sortedMonths;
   adminReport.faultsByMonth = faultsByMonth;
-  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('model')" title="Sort">Model &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">&gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div>` + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
+  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('model')" title="Sort">Model &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">&gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
   renderInteractiveGraphs();
+  renderCategoryCharts();
   renderDtTable();
   
   const totalWorkingHours = getTotalWorkingHours(parseInt(adminReport.period_days));
@@ -1728,20 +2071,94 @@ function renderAudit(){
     return true;
   });
   if(sortD === 'asc') filtered.reverse();
-  document.getElementById('auditBody').innerHTML=filtered.map(r=>`<tr><td class="mono-cell">${fmtDT(r.created_at)}</td><td>${r.user_name}</td><td><span class="tag">${r.action}</span></td><td style="color:var(--text3)">${r.machine_name||r.machine_id||'&mdash;'}</td><td style="color:var(--text2);max-width:220px;font-size:11px">${r.detail||''}</td><td style="text-align:right"><button class="btn btn-sm btn-danger" style="padding:2px 6px" onclick="deleteAudit(${r.id})" title="Delete">&#10005;</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">No audit records found</td></tr>';
+  document.getElementById('auditBody').innerHTML=filtered.map(r=>`<tr><td class="mono-cell">${fmtDT(r.created_at)}</td><td>${r.user_name}</td><td><span class="tag">${r.action}</span></td><td style="color:var(--text3)">${r.machine_name||r.machine_id||'&mdash;'}</td><td style="color:var(--text2);max-width:220px;font-size:11px">${r.detail||''}</td><td style="text-align:right;white-space:nowrap"><button class="btn btn-sm" style="padding:2px 8px;margin-right:4px" onclick="editAudit(${r.id})" title="Edit">Edit</button><button class="btn btn-sm btn-danger" style="padding:2px 6px" onclick="deleteAudit(${r.id})" title="Delete">&#10005;</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">No audit records found</td></tr>';
 }
 
-function deleteAudit(id) {
+async function editAudit(id) {
+  const r = currentAuditData.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('editAuditId').value = id;
+  document.getElementById('editAuditTitle').textContent = `Edit ${r.action}`;
+  
+  const res = await api('GET', `/audit/${id}/source`);
+  if (!res) return;
+  
+  const { audit, source, type } = res;
+  document.getElementById('editAuditType').value = type;
+  document.getElementById('editAuditSourceId').value = source ? source.id : '';
+  
+  let html = '';
+  if (type === 'activity_log' && source) {
+    const acts = state.settings?.activity_categories ? JSON.parse(state.settings.activity_categories) : ['Treatment session','QA check','Service','Calibration','Inspection','Status change','Other'];
+    let actOpts = acts.map(c => `<option value="${c}" ${source.activity===c?'selected':''}>${c}</option>`).join('');
+    if (!acts.includes(source.activity)) actOpts += `<option value="${source.activity}" selected>${source.activity}</option>`;
+    
+    html += `<div class="form-group"><label>User Name</label><input id="eaUser" value="${source.user_name}"></div>`;
+    html += `<div class="form-group"><label>Activity</label><select id="eaActivity">${actOpts}</select></div>`;
+    html += `<div class="form-group"><label>Notes</label><textarea id="eaNotes">${source.notes||''}</textarea></div>`;
+  } else if (type === 'status_history' && source) {
+    html += `<div class="form-group"><label>User Name</label><input id="eaUser" value="${source.changed_by}"></div>`;
+    html += `<div class="form-group"><label>Reason / Notes</label><textarea id="eaReason">${source.reason||''}</textarea></div>`;
+    html += `<input type="hidden" id="eaDetail" value="${audit.detail}">`;
+  } else if (type === 'faults' && source) {
+    const cats = state.settings?.fault_categories ? JSON.parse(state.settings.fault_categories) : ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'];
+    const sevs = state.settings?.fault_severities ? JSON.parse(state.settings.fault_severities) : ['Low','Medium','High','Critical'];
+    let catOpts = cats.map(c => `<option value="${c}" ${source.category===c?'selected':''}>${c}</option>`).join('');
+    if (!cats.includes(source.category)) catOpts += `<option value="${source.category}" selected>${source.category}</option>`;
+    let sevOpts = sevs.map(c => `<option value="${c}" ${source.severity===c?'selected':''}>${c}</option>`).join('');
+    if (!sevs.includes(source.severity)) sevOpts += `<option value="${source.severity}" selected>${source.severity}</option>`;
+    
+    html += `<div class="form-group"><label>Reported By</label><input id="eaUser" value="${source.user_name}"></div>`;
+    html += `<div class="form-group"><label>Category</label><select id="eaCategory">${catOpts}</select></div>`;
+    html += `<div class="form-group"><label>Severity</label><select id="eaSeverity">${sevOpts}</select></div>`;
+    html += `<div class="form-group"><label>Description</label><textarea id="eaDesc">${source.description||''}</textarea></div>`;
+  } else {
+    html += `<p style="font-size:12px;color:var(--amber);margin-bottom:12px;padding:8px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius)">Editing basic audit text only. Source data not found or not supported.</p>`;
+    html += `<div class="form-group"><label>User Name</label><input id="eaUser" value="${audit.user_name}"></div>`;
+    html += `<div class="form-group"><label>Detail</label><textarea id="eaDetailText">${audit.detail||''}</textarea></div>`;
+  }
+  document.getElementById('editAuditDynamicFields').innerHTML = html;
+  openModal('editAuditModal');
+}
+
+async function submitEditAudit() {
+  const id = document.getElementById('editAuditId').value;
+  const type = document.getElementById('editAuditType').value;
+  const source_id = document.getElementById('editAuditSourceId').value;
+  const body = { type, source_id };
+  body.user_name = document.getElementById('eaUser').value.trim();
+  if (!body.user_name) { toast('User name required', 'error'); return; }
+  if (type === 'activity_log') { body.activity = document.getElementById('eaActivity').value; body.notes = document.getElementById('eaNotes').value.trim(); }
+  else if (type === 'status_history') { body.reason = document.getElementById('eaReason').value.trim(); body.detail = document.getElementById('eaDetail').value; }
+  else if (type === 'faults') { body.category = document.getElementById('eaCategory').value; body.severity = document.getElementById('eaSeverity').value; body.description = document.getElementById('eaDesc').value.trim(); }
+  else { body.detail = document.getElementById('eaDetailText').value.trim(); }
+  
+  const res = await api('PUT', `/audit/${id}/source`, body);
+  if (res) {
+    toast('Data updated successfully', 'success');
+    closeModal('editAuditModal');
+    loadAudit();
+  }
+}
+
+async function deleteAudit(id) {
   document.getElementById('deleteAuditId').value = id;
+  const res = await api('GET', `/audit/${id}/source`);
+  const warningEl = document.getElementById('deleteAuditWarning');
+  if (res && res.source) {
+    warningEl.innerHTML = `Are you sure you want to permanently delete this log entry <strong style="color:var(--red)">AND its underlying original data</strong>? This action cannot be undone.`;
+  } else {
+    warningEl.innerHTML = `Are you sure you want to permanently delete this log entry? <strong>This action cannot be undone.</strong>`;
+  }
   openModal('deleteAuditModal');
 }
 async function executeDeleteAudit() {
   const id = document.getElementById('deleteAuditId').value;
-  const res = await api('DELETE', `/audit/${id}`);
+  const res = await api('DELETE', `/audit/${id}/source`);
   if(res){
     currentAuditData = currentAuditData.filter(r => r.id != id);
     renderAudit();
-    toast('Audit entry deleted', 'success');
+    toast('Entry and associated data deleted', 'success');
   }
   closeModal('deleteAuditModal');
 }
@@ -1749,7 +2166,7 @@ async function executeDeleteAudit() {
 async function saveSettings(){
   const start = document.getElementById('cfgStart').value;
   const end = document.getElementById('cfgEnd').value;
-  if(parseInt(start) >= parseInt(end)) { toast('Start hour must be before end hour', 'error'); return; }
+  if(start >= end) { toast('Start time must be before end time', 'error'); return; }
   await api('PATCH', '/settings', { clinical_start: start, clinical_end: end });
 }
 
@@ -1855,6 +2272,7 @@ document.addEventListener('keydown', e => {
       else if (openM.id === 'deleteFaultModal') executeDeleteFault();
       else if (openM.id === 'deleteSettingItemModal') executeDeleteSettingItem();
       else if (openM.id === 'deleteAuditModal') executeDeleteAudit();
+      else if (openM.id === 'editAuditModal') submitEditAudit();
       else if (openM.id === 'backupOverwriteModal') confirmServerBackupOverwrite();
       else if (openM.id === 'stationModal') saveDefaultStation();
       else if (openM.id === 'restoreModal') confirmRestore();
@@ -1867,8 +2285,8 @@ function toast(msg,type='info'){const el=document.createElement('div');el.classN
 function roleClass(r){return r==='Radiographer'?'role-r':r==='Physicist'?'role-p':'role-e'}
 function fmtDT(s){if(!s)return'&mdash;';const d=new Date(s.includes('T')||s.includes('Z')?s:s.replace(' ','T')+'Z');return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' '+d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
 function fmtD(s){if(!s)return'&mdash;';const d=new Date(s.includes('T')||s.includes('Z')?s:s.replace(' ','T')+'Z');return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}
-function getWorkingHours(start,end){let startH=parseInt(state.settings?.clinical_start||'7');let endH=parseInt(state.settings?.clinical_end||'20');let current=new Date(start);const endDt=new Date(end);let totalHours=0;while(current<endDt){let day=current.getDay();let hour=current.getHours();if(day===0||day===6){current.setHours(24,0,0,0);continue}if(hour<startH){current.setHours(startH,0,0,0);continue}if(hour>=endH){current.setHours(24,0,0,0);continue}let nextBoundary=new Date(current);nextBoundary.setHours(endH,0,0,0);if(endDt<nextBoundary)nextBoundary=endDt;totalHours+=(nextBoundary-current)/3600000;current=nextBoundary}return totalHours}
-function getTotalWorkingHours(days){let startH=parseInt(state.settings?.clinical_start||'7');let endH=parseInt(state.settings?.clinical_end||'20');let dailyHrs=Math.max(0,endH-startH);let total=0;const now=new Date();for(let i=0;i<days;i++){const d=new Date();d.setDate(now.getDate()-i);const dayOfWeek=d.getDay();if(dayOfWeek>0&&dayOfWeek<6)total+=dailyHrs}return total}
+function getWorkingHours(start,end){let sStr=state.settings?.clinical_start||'07:00';if(!sStr.includes(':'))sStr+=':00';let eStr=state.settings?.clinical_end||'20:00';if(!eStr.includes(':'))eStr+=':00';let[sH,sM]=sStr.split(':').map(Number);let[eH,eM]=eStr.split(':').map(Number);let startH=sH+sM/60;let endH=eH+eM/60;let current=new Date(start);const endDt=new Date(end);let totalHours=0;while(current<endDt){let day=current.getDay();let hour=current.getHours();let min=current.getMinutes();let currH=hour+min/60+current.getSeconds()/3600;if(day===0||day===6){current.setHours(24,0,0,0);continue}if(currH<startH){current.setHours(sH,sM,0,0);continue}if(currH>=endH){current.setHours(24,0,0,0);continue}let nextBoundary=new Date(current);nextBoundary.setHours(eH,eM,0,0);if(endDt<nextBoundary)nextBoundary=endDt;totalHours+=(nextBoundary-current)/3600000;current=nextBoundary}return totalHours}
+function getTotalWorkingHours(days){let sStr=state.settings?.clinical_start||'07:00';if(!sStr.includes(':'))sStr+=':00';let eStr=state.settings?.clinical_end||'20:00';if(!eStr.includes(':'))eStr+=':00';let[sH,sM]=sStr.split(':').map(Number);let[eH,eM]=eStr.split(':').map(Number);let startH=sH+sM/60;let endH=eH+eM/60;let dailyHrs=Math.max(0,endH-startH);let total=0;const now=new Date();for(let i=0;i<days;i++){const d=new Date();d.setDate(now.getDate()-i);const dayOfWeek=d.getDay();if(dayOfWeek>0&&dayOfWeek<6)total+=dailyHrs}return total}
 setInterval(()=>{
   document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-GB');
   document.querySelectorAll('.bd-timer').forEach(el => {

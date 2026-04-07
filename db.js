@@ -127,11 +127,15 @@ try { db.exec('UPDATE machines SET display_order = rowid WHERE display_order = 0
 // ── SEED DEFAULT SETTINGS ─────────────────────────────────────────────
 const sCount = db.prepare('SELECT COUNT(*) as n FROM settings').get();
 if (sCount.n === 0) {
-  db.prepare("INSERT INTO settings (key, value) VALUES ('clinical_start', '7')").run();
-  db.prepare("INSERT INTO settings (key, value) VALUES ('clinical_end', '20')").run();
+  db.prepare("INSERT INTO settings (key, value) VALUES ('clinical_start', '07:00')").run();
+  db.prepare("INSERT INTO settings (key, value) VALUES ('clinical_end', '20:00')").run();
 }
 db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('fault_categories', '[\"Mechanical\",\"Electrical\",\"Software\",\"Imaging / IGRT\",\"Dosimetry\",\"Safety Interlock\",\"MLC / Collimator\",\"Couch\",\"Other\"]')");
 db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('fault_severities', '[\"Low\",\"Medium\",\"High\",\"Critical\"]')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('activity_categories', '[\"Treatment session\",\"QA check\",\"Service\",\"Calibration\",\"Inspection\",\"Status change\",\"Other\"]')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('default_fault_category', 'Other')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('default_fault_severity', 'Low')");
+db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('default_activity_category', 'Treatment session')");
 db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_pwd_enabled', '0')");
 db.exec("INSERT OR IGNORE INTO settings (key, value) VALUES ('admin_pwd', 'admin')");
 
