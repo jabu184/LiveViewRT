@@ -1,5 +1,3 @@
-LiveViewRT – Radiotherapy Machine Management Dashboard
-
 <img width="2816" height="1536" alt="Gemini_Generated_Image_etl97retl97retl9" src="https://github.com/user-attachments/assets/ced1045c-ccd6-4388-a531-8095b8e25b4d" />
 
 LiveViewRT is a real-time, web-based dashboard designed to track the operational status, faults, and utilisation of radiotherapy treatment machines. It provides an at-a-glance view of the entire department while maintaining detailed audit trails and downtime metrics.
