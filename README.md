@@ -2,7 +2,7 @@
 
 LiveViewRT is a real-time, web-based dashboard designed to track the operational status, faults, and utilisation of radiotherapy treatment machines. It provides an at-a-glance view of the entire department while maintaining detailed audit trails and downtime metrics.
 
-<img width="2516" height="1242" alt="image" src="https://github.com/user-attachments/assets/a4be13fd-3618-4b96-8c03-e494a0d4bcb5" />
+<img width="2520" height="1363" alt="image" src="https://github.com/user-attachments/assets/51bc7c04-d030-48b5-bb14-7cae84c5bf6e" />
 
 <img width="2529" height="1325" alt="image" src="https://github.com/user-attachments/assets/5c0e1454-3316-4db3-a560-4f4cca58c3fb" />
 
