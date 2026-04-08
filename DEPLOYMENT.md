@@ -172,6 +172,25 @@ The `Upgrade` and `Connection` headers are required for WebSocket support.
 
 ---
 
+## Portable Deployment (No Install Required)
+
+If you want to drag-and-drop the application to another Windows machine without installing Node.js or running `npm install`:
+
+1. On your source machine, ensure you have run `npm install` so the `node_modules` folder is present. *(Note: This must be done on a Windows x64 machine so the SQLite bindings are compiled correctly for Windows).*
+2. Download the standalone `node.exe` (Windows Binary) from the official Node.js website (https://nodejs.org/en/download/).
+3. Place `node.exe` directly inside the `rtdashboard` folder (next to `server.js`).
+4. Create a new text file named `start.bat` in the same folder with the following content:
+   ```bat
+   @echo off
+   echo Starting LiveViewRT...
+   .\node.exe server.js
+   pause
+   ```
+5. You can now copy this entire folder to any other Windows machine (e.g., via a USB drive or network share).
+6. To run the dashboard, simply double-click `start.bat`. No installation or unpackaging is required.
+
+---
+
 ## Configuration
 
 Environment variables (set in the service definition or a `.env` file):
