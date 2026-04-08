@@ -778,7 +778,7 @@ const STATUS_OPTS=[
   {id:'breakdown',label:'Breakdown'}
 ];
 
-let ws,wsTimer;
+let ws,wsTimer,isFirstInit=true;
 function connectWS(){
   ws=new WebSocket(WS_URL);
   ws.onopen=()=>{document.getElementById('connDot').className='conn-dot ok';document.getElementById('connLabel').textContent='Live';clearTimeout(wsTimer)};
@@ -793,10 +793,15 @@ function handleWS(msg){
     const defMach = localStorage.getItem('defaultMachine');
     if (defMach && state.machines.find(m => m.id === defMach && !m.archived)) {
       document.getElementById('localStationBtn').textContent = `Station: ${defMach}`;
-      showMachine(defMach);
+      if(isFirstInit) showMachine(defMach);
     } else {
       document.getElementById('localStationBtn').textContent = `Set Station`;
     }
+    if (!isFirstInit) {
+      if (currentPage === 'admin' || currentPage === 'overview') showPage(currentPage);
+      else if (currentMachine) showMachine(currentMachine);
+    }
+    isFirstInit = false;
     return;
   }
   if(msg.type==='machine_added'){state.machines.push(msg.payload);buildAll();toast(`${msg.payload.name} added`,'success');if(currentPage==='admin')loadAdminData();return}
