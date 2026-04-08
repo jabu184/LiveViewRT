@@ -227,4 +227,4 @@ To restore: stop the service, replace the file, restart the service.
 
 ---
 
-*RT Dashboard v1.0 — Internal NHS Use Only*
+*LiveViewRT v1.2*

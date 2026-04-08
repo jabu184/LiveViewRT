@@ -385,12 +385,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 <div class="modal-overlay" id="logModal">
   <div class="modal">
     <div class="modal-head"><h2>Log Entry</h2><button class="modal-close" onclick="closeModal('logModal')">&#10005;</button></div>
-    <div class="form-group"><label>Machine</label><select id="logMachine"></select></div>
+    <div class="form-group"><label>Machine <span style="color:var(--red)">*</span></label><select id="logMachine"></select></div>
     <div class="form-row">
-      <div class="form-group"><label>Your Name</label><input id="logUser" placeholder="e.g. J. Smith"></div>
-      <div class="form-group"><label>Role</label><select id="logRole"><option>Radiographer</option><option>Physicist</option><option>Engineer</option><option>Dosimetrist</option><option>Admin</option></select></div>
+      <div class="form-group"><label>Your Name <span style="color:var(--red)">*</span></label><input id="logUser" placeholder="e.g. J. Smith"></div>
+      <div class="form-group"><label>Role <span style="color:var(--red)">*</span></label><select id="logRole"><option>Radiographer</option><option>Physicist</option><option>Engineer</option><option>Dosimetrist</option><option>Admin</option></select></div>
     </div>
-    <div class="form-group"><label>Activity</label><select id="logActivity"></select></div>
+    <div class="form-group"><label>Activity <span style="color:var(--red)">*</span></label><select id="logActivity"></select></div>
     <div class="form-group"><label>Notes</label><textarea id="logNotes" placeholder="Describe the activity&hellip;"></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('logModal')">Cancel</button>
@@ -403,17 +403,17 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 <div class="modal-overlay" id="faultModal">
   <div class="modal">
     <div class="modal-head"><h2>Report Fault / Breakdown</h2><button class="modal-close" onclick="closeModal('faultModal')">&#10005;</button></div>
-    <div class="form-group"><label>Machine</label><select id="faultMachine"></select></div>
+    <div class="form-group"><label>Machine <span style="color:var(--red)">*</span></label><select id="faultMachine"></select></div>
     <div class="form-row">
-      <div class="form-group"><label>Reported By</label><input id="faultUser" placeholder="Your name"></div>
-      <div class="form-group"><label>Role</label><select id="faultRole"><option>Radiographer</option><option>Physicist</option><option>Engineer</option></select></div>
+      <div class="form-group"><label>Reported By <span style="color:var(--red)">*</span></label><input id="faultUser" placeholder="Your name"></div>
+      <div class="form-group"><label>Role <span style="color:var(--red)">*</span></label><select id="faultRole"><option>Radiographer</option><option>Physicist</option><option>Engineer</option></select></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label>Category</label><select id="faultCategory"></select></div>
-      <div class="form-group"><label>Severity</label><select id="faultSeverity"></select></div>
+      <div class="form-group"><label>Category <span style="color:var(--red)">*</span></label><select id="faultCategory"></select></div>
+      <div class="form-group"><label>Severity <span style="color:var(--red)">*</span></label><select id="faultSeverity"></select></div>
     </div>
-    <div class="form-group"><label>Description</label><textarea id="faultDesc" placeholder="Error codes, symptoms, conditions&hellip;"></textarea></div>
-    <div class="form-group"><label>Change Machine Status</label><select id="faultStatusChange"><option value="">No change</option><option value="breakdown">Breakdown &mdash; take offline</option><option value="service">Service</option><option value="qa">Restricted to QA only</option></select></div>
+    <div class="form-group"><label>Description <span style="color:var(--red)">*</span></label><textarea id="faultDesc" placeholder="Error codes, symptoms, conditions&hellip;"></textarea></div>
+    <div class="form-group"><label>Change Machine Status</label><select id="faultStatusChange"><option value="">No change</option><option value="breakdown">Breakdown</option><option value="service">Service</option><option value="qa">QA / Physics</option></select></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('faultModal')">Cancel</button>
       <button class="btn btn-danger" onclick="submitFault()">Report Fault</button>
@@ -455,10 +455,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="modal-head"><h2>Acknowledge Fault</h2><button class="modal-close" onclick="closeModal('resolveModal')">&#10005;</button></div>
     <input type="hidden" id="resolveFaultId">
     <div class="form-row">
-      <div class="form-group"><label>Category</label><select id="resolveCategory"></select></div>
-      <div class="form-group"><label>Severity</label><select id="resolveSeverity"></select></div>
+      <div class="form-group"><label>Category <span style="color:var(--red)">*</span></label><select id="resolveCategory"></select></div>
+      <div class="form-group"><label>Severity <span style="color:var(--red)">*</span></label><select id="resolveSeverity"></select></div>
     </div>
-    <div class="form-group"><label>Description</label><textarea id="resolveDesc" style="min-height:56px"></textarea></div>
+    <div class="form-group"><label>Description <span style="color:var(--red)">*</span></label><textarea id="resolveDesc" style="min-height:56px"></textarea></div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div class="form-group"><label id="resolveUserLabel">Acknowledged By <span style="color:var(--red)">*</span></label><input id="resolveUser" placeholder="Your name"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
@@ -475,10 +475,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <p id="rbDescText" style="font-size:13px;color:var(--text2);margin-bottom:16px">Mark the breakdown as resolved. The accumulated downtime (Mon-Fri, 7am-8pm) is calculated below, but can be overridden if required.</p>
     <input type="hidden" id="rbFaultId">
     <div class="form-row">
-      <div class="form-group"><label>Category</label><select id="rbCategory"></select></div>
-      <div class="form-group"><label>Severity</label><select id="rbSeverity"></select></div>
+      <div class="form-group"><label>Category <span style="color:var(--red)">*</span></label><select id="rbCategory"></select></div>
+      <div class="form-group"><label>Severity <span style="color:var(--red)">*</span></label><select id="rbSeverity"></select></div>
     </div>
-    <div class="form-group"><label>Description</label><textarea id="rbDesc" style="min-height:56px"></textarea></div>
+    <div class="form-group"><label>Description <span style="color:var(--red)">*</span></label><textarea id="rbDesc" style="min-height:56px"></textarea></div>
     <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
     <div class="form-row">
       <div class="form-group"><label>Resolved By <span style="color:var(--red)">*</span></label><input id="rbUser" placeholder="Required to confirm"></div>
@@ -529,8 +529,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="modal-head"><h2 id="concessionModalTitle">Add Concession / Restriction</h2><button class="modal-close" onclick="closeModal('concessionModal')">&#10005;</button></div>
     <input type="hidden" id="concessionMachine">
     <input type="hidden" id="concessionId">
-    <div class="form-group"><label>Type</label><select id="concessionType"><option>Restriction</option><option>Concession</option></select></div>
-    <div class="form-group"><label>Description</label><textarea id="concessionDesc" placeholder="e.g. No electrons, or OK to use with output &lt;3%"></textarea></div>
+    <div class="form-group"><label>Type <span style="color:var(--red)">*</span></label><select id="concessionType"><option>Restriction</option><option>Concession</option></select></div>
+    <div class="form-group"><label>Description <span style="color:var(--red)">*</span></label><textarea id="concessionDesc" placeholder="e.g. No electrons, or OK to use with output &lt;3%"></textarea></div>
     <div class="form-row">
       <div class="form-group"><label>Added By <span style="color:var(--red)">*</span></label><input id="concessionUser" placeholder="Your name"></div>
       <div class="form-group"><label>Review By (Optional)</label><input id="concessionReviewBy" type="date"></div>
@@ -582,7 +582,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 <div class="modal-overlay" id="adminAuthModal">
   <div class="modal" style="max-width:300px">
     <div class="modal-head"><h2>Admin Access</h2><button class="modal-close" onclick="closeModal('adminAuthModal')">&#10005;</button></div>
-    <div class="form-group"><label>Password</label><input type="password" id="adminAuthPwd"></div>
+    <div class="form-group"><label>Password <span style="color:var(--red)">*</span></label><input type="password" id="adminAuthPwd"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('adminAuthModal')">Cancel</button>
       <button class="btn btn-primary" onclick="verifyAdminPwd()">Enter</button>
@@ -622,7 +622,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div style="text-align:center;padding:10px 0 20px">
       <div style="font-size:42px;margin-bottom:12px;color:var(--blue);line-height:1">&#9762;</div>
       <h3 style="font-size:18px;font-weight:600;margin-bottom:4px;letter-spacing:-0.02em">LiveViewRT</h3>
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.1</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.2</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3)">April 2026</p>
     </div>
@@ -641,6 +641,19 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('archiveModal')">Cancel</button>
       <button class="btn btn-danger" onclick="confirmArchiveMachine()">Archive</button>
+    </div>
+  </div>
+</div>
+
+<!-- UNARCHIVE MACHINE MODAL -->
+<div class="modal-overlay" id="unarchiveModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head"><h2>Unarchive Machine</h2><button class="modal-close" onclick="closeModal('unarchiveModal')">&#10005;</button></div>
+    <input type="hidden" id="unarchiveMachineId">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Are you sure you want to unarchive machine <strong id="unarchiveMachineName" style="font-family:var(--mono)"></strong>? It will be restored to the dashboard.</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn" onclick="closeModal('unarchiveModal')">Cancel</button>
+      <button class="btn btn-success" onclick="confirmUnarchiveMachine()">Unarchive</button>
     </div>
   </div>
 </div>
@@ -1211,6 +1224,12 @@ function requestStatusChange(machineId,newStatus){
     toast('Machine must be turned ON first to select this status.','error');
     return;
   }
+  if(newStatus === 'breakdown') {
+    openFaultFor(machineId);
+    document.getElementById('faultStatusChange').value = 'breakdown';
+    document.getElementById('faultSeverity').value = 'High';
+    return;
+  }
   pendingStatus={machineId,newStatus};
   const oldMeta=STATUS_META[m.status]||STATUS_META.offline,newMeta=STATUS_META[newStatus]||STATUS_META.offline;
   document.getElementById('statusConfirmDesc').textContent=`Changing ${m.name} from "${oldMeta.label}" to "${newMeta.label}". Enter your name to confirm.`;
@@ -1383,9 +1402,17 @@ async function confirmArchiveMachine() {
   closeModal('archiveModal');
 }
 
-async function unarchiveMachine(id) {
-  if (!confirm(`Are you sure you want to unarchive machine ${id}? It will be restored to the dashboard.`)) return;
+function unarchiveMachine(id) {
+  const m = state.machines.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('unarchiveMachineId').value = id;
+  document.getElementById('unarchiveMachineName').textContent = m.name;
+  openModal('unarchiveModal');
+}
+async function confirmUnarchiveMachine() {
+  const id = document.getElementById('unarchiveMachineId').value;
   await api('PATCH', `/machines/${id}/unarchive`);
+  closeModal('unarchiveModal');
 }
 function deleteMachine(id) {
   const m = state.machines.find(x => x.id === id);
@@ -1838,7 +1865,7 @@ function renderCategoryCharts() {
       <div style="flex:0 0 220px; border-right:1px solid var(--border); padding:16px; background:var(--bg3)">
         <div style="font-size:10px; font-weight:600; text-transform:uppercase; color:var(--text3); margin-bottom:8px; letter-spacing:0.05em; font-family:var(--mono)">Event Type</div>
         <div style="display:flex; flex-direction:column; margin-bottom:20px">
-          <div id="catT-bd" class="cat-list-item ${catChartType==='bd'?'active':''}" onclick="setCatChartType('bd')">Breakdowns</div>
+          <div id="catT-bd" class="cat-list-item ${catChartType==='bd'?'active':''}" onclick="setCatChartType('bd')">Breakdowns Only</div>
           <div id="catT-faults" class="cat-list-item ${catChartType==='faults'?'active':''}" onclick="setCatChartType('faults')">All Faults</div>
         </div>
         <div style="font-size:10px; font-weight:600; text-transform:uppercase; color:var(--text3); margin-bottom:8px; letter-spacing:0.05em; font-family:var(--mono)">Machine</div>
@@ -1897,6 +1924,13 @@ let adminReport=null;
 async function loadAdminData(){
   const days=document.getElementById('reportDays').value;
   adminReport=await fetch(`${API}/report?days=${days}`).then(r=>r.json());
+  
+  const activeMachineIds = new Set(state.machines.filter(m => !m.archived).map(m => m.id));
+  adminReport.summary = adminReport.summary.filter(s => activeMachineIds.has(s.machine.id));
+  adminReport.faults = adminReport.faults.filter(f => activeMachineIds.has(f.machine_id));
+  adminReport.activity = adminReport.activity.filter(a => activeMachineIds.has(a.machine_id));
+  adminReport.yearly_faults = (adminReport.yearly_faults||[]).filter(f => activeMachineIds.has(f.machine_id));
+
   const{summary,faults,activity,yearly_faults}=adminReport;
   summary.forEach(s => {
     s.long_faults = faults.filter(f => f.machine_id === s.machine.id && f.downtime_hrs > 2).length;
@@ -1909,7 +1943,7 @@ async function loadAdminData(){
     <div class="metric-card"><div class="lbl">Total Downtime</div><div class="val" style="color:var(--amber)">${totalDt.toFixed(2)}h</div><div class="sub">Machine breakdown</div></div>`;
 
   const mSel=document.getElementById('faultFilterMachine'),cSel=document.getElementById('faultFilterCategory');
-  if(mSel){const curM=mSel.value;mSel.innerHTML='<option value="">All Machines</option>'+state.machines.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');mSel.value=curM}
+  if(mSel){const curM=mSel.value;mSel.innerHTML='<option value="">All Machines</option>'+state.machines.filter(m=>!m.archived).map(m=>`<option value="${m.id}">${m.name}</option>`).join('');mSel.value=curM}
   if(cSel){const curC=cSel.value,cats=[...new Set(faults.map(f=>f.category))].sort();cSel.innerHTML='<option value="">All Categories</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');cSel.value=curC}
   renderAdminFaults();
 
@@ -2048,6 +2082,8 @@ async function loadAdminData(){
 let currentAuditData = [];
 async function loadAudit(){
   currentAuditData=await fetch(`${API}/audit?days=${document.getElementById('reportDays').value}`).then(r=>r.json());
+  const activeMachineIds = new Set(state.machines.filter(m => !m.archived).map(m => m.id));
+  currentAuditData = currentAuditData.filter(r => !r.machine_id || activeMachineIds.has(r.machine_id));
   const actions = [...new Set(currentAuditData.map(r=>r.action))].sort();
   const sel = document.getElementById('auditFilterAction');
   const currVal = sel.value;
@@ -2055,7 +2091,7 @@ async function loadAudit(){
   sel.value = currVal;
   const mSel = document.getElementById('auditFilterMachine');
   const curM = mSel.value;
-  mSel.innerHTML = '<option value="">All Machines</option>' + state.machines.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  mSel.innerHTML = '<option value="">All Machines</option>' + state.machines.filter(m=>!m.archived).map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
   mSel.value = curM;
   renderAudit();
 }
@@ -2093,11 +2129,11 @@ async function editAudit(id) {
     let actOpts = acts.map(c => `<option value="${c}" ${source.activity===c?'selected':''}>${c}</option>`).join('');
     if (!acts.includes(source.activity)) actOpts += `<option value="${source.activity}" selected>${source.activity}</option>`;
     
-    html += `<div class="form-group"><label>User Name</label><input id="eaUser" value="${source.user_name}"></div>`;
-    html += `<div class="form-group"><label>Activity</label><select id="eaActivity">${actOpts}</select></div>`;
+    html += `<div class="form-group"><label>User Name <span style="color:var(--red)">*</span></label><input id="eaUser" value="${source.user_name}"></div>`;
+    html += `<div class="form-group"><label>Activity <span style="color:var(--red)">*</span></label><select id="eaActivity">${actOpts}</select></div>`;
     html += `<div class="form-group"><label>Notes</label><textarea id="eaNotes">${source.notes||''}</textarea></div>`;
   } else if (type === 'status_history' && source) {
-    html += `<div class="form-group"><label>User Name</label><input id="eaUser" value="${source.changed_by}"></div>`;
+    html += `<div class="form-group"><label>User Name <span style="color:var(--red)">*</span></label><input id="eaUser" value="${source.changed_by}"></div>`;
     html += `<div class="form-group"><label>Reason / Notes</label><textarea id="eaReason">${source.reason||''}</textarea></div>`;
     html += `<input type="hidden" id="eaDetail" value="${audit.detail}">`;
   } else if (type === 'faults' && source) {
@@ -2108,10 +2144,10 @@ async function editAudit(id) {
     let sevOpts = sevs.map(c => `<option value="${c}" ${source.severity===c?'selected':''}>${c}</option>`).join('');
     if (!sevs.includes(source.severity)) sevOpts += `<option value="${source.severity}" selected>${source.severity}</option>`;
     
-    html += `<div class="form-group"><label>Reported By</label><input id="eaUser" value="${source.user_name}"></div>`;
-    html += `<div class="form-group"><label>Category</label><select id="eaCategory">${catOpts}</select></div>`;
-    html += `<div class="form-group"><label>Severity</label><select id="eaSeverity">${sevOpts}</select></div>`;
-    html += `<div class="form-group"><label>Description</label><textarea id="eaDesc">${source.description||''}</textarea></div>`;
+    html += `<div class="form-group"><label>Reported By <span style="color:var(--red)">*</span></label><input id="eaUser" value="${source.user_name}"></div>`;
+    html += `<div class="form-group"><label>Category <span style="color:var(--red)">*</span></label><select id="eaCategory">${catOpts}</select></div>`;
+    html += `<div class="form-group"><label>Severity <span style="color:var(--red)">*</span></label><select id="eaSeverity">${sevOpts}</select></div>`;
+    html += `<div class="form-group"><label>Description <span style="color:var(--red)">*</span></label><textarea id="eaDesc">${source.description||''}</textarea></div>`;
   } else if (type === 'faults_resolve' && source) {
     const cats = state.settings?.fault_categories ? JSON.parse(state.settings.fault_categories) : ['Mechanical','Electrical','Software','Imaging / IGRT','Dosimetry','Safety Interlock','MLC / Collimator','Couch','Other'];
     const sevs = state.settings?.fault_severities ? JSON.parse(state.settings.fault_severities) : ['Low','Medium','High','Critical'];
@@ -2120,16 +2156,16 @@ async function editAudit(id) {
     let sevOpts = sevs.map(c => `<option value="${c}" ${source.severity===c?'selected':''}>${c}</option>`).join('');
     if (!sevs.includes(source.severity)) sevOpts += `<option value="${source.severity}" selected>${source.severity}</option>`;
     
-    html += `<div class="form-group"><label>Resolved By</label><input id="eaUser" value="${source.resolved_by || source.user_name}"></div>`;
+    html += `<div class="form-group"><label>Resolved By <span style="color:var(--red)">*</span></label><input id="eaUser" value="${source.resolved_by || source.user_name}"></div>`;
     html += `<div class="form-row">
-      <div class="form-group"><label>Category</label><select id="eaCategory">${catOpts}</select></div>
-      <div class="form-group"><label>Severity</label><select id="eaSeverity">${sevOpts}</select></div>
+      <div class="form-group"><label>Category <span style="color:var(--red)">*</span></label><select id="eaCategory">${catOpts}</select></div>
+      <div class="form-group"><label>Severity <span style="color:var(--red)">*</span></label><select id="eaSeverity">${sevOpts}</select></div>
     </div>`;
-    html += `<div class="form-group"><label>Description</label><textarea id="eaDesc">${source.description||''}</textarea></div>`;
+    html += `<div class="form-group"><label>Description <span style="color:var(--red)">*</span></label><textarea id="eaDesc">${source.description||''}</textarea></div>`;
     html += `<div class="form-group"><label>Downtime (h)</label><input type="number" step="0.01" id="eaDowntime" value="${source.downtime_hrs||0}"></div>`;
   } else {
     html += `<p style="font-size:12px;color:var(--amber);margin-bottom:12px;padding:8px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius)">Editing basic audit text only. Source data not found or not supported.</p>`;
-    html += `<div class="form-group"><label>User Name</label><input id="eaUser" value="${audit.user_name}"></div>`;
+    html += `<div class="form-group"><label>User Name <span style="color:var(--red)">*</span></label><input id="eaUser" value="${audit.user_name}"></div>`;
     html += `<div class="form-group"><label>Detail</label><textarea id="eaDetailText">${audit.detail||''}</textarea></div>`;
   }
   document.getElementById('editAuditDynamicFields').innerHTML = html;
@@ -2284,6 +2320,7 @@ document.addEventListener('keydown', e => {
       else if (openM.id === 'machineModal') submitMachine();
       else if (openM.id === 'adminAuthModal') verifyAdminPwd();
       else if (openM.id === 'archiveModal') confirmArchiveMachine();
+      else if (openM.id === 'unarchiveModal') confirmUnarchiveMachine();
       else if (openM.id === 'deleteModal') confirmDeleteMachine();
       else if (openM.id === 'deleteFaultModal') executeDeleteFault();
       else if (openM.id === 'deleteSettingItemModal') executeDeleteSettingItem();
