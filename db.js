@@ -51,6 +51,8 @@ db.exec(`
     resolved_by TEXT,
     resolved_at TEXT,
     downtime_hrs REAL,
+    screenshot_taken INTEGER NOT NULL DEFAULT 0,
+    fault_codes TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -97,6 +99,8 @@ db.exec(`
 try { db.exec('ALTER TABLE concessions ADD COLUMN review_by TEXT'); } catch (e) { /* Ignore if it already exists */ }
 try { db.exec('ALTER TABLE machines ADD COLUMN archived INTEGER NOT NULL DEFAULT 0'); } catch (e) { /* Ignore if it already exists */ }
 try { db.exec('ALTER TABLE machines ADD COLUMN display_order INTEGER NOT NULL DEFAULT 0'); } catch (e) { /* Ignore if it already exists */ }
+try { db.exec('ALTER TABLE faults ADD COLUMN screenshot_taken INTEGER NOT NULL DEFAULT 0'); } catch (e) { /* Ignore if it already exists */ }
+try { db.exec('ALTER TABLE faults ADD COLUMN fault_codes TEXT'); } catch (e) { /* Ignore if it already exists */ }
 
 // ── SEED DEFAULT MACHINES if table empty ─────────────────────────────
 
@@ -205,8 +209,8 @@ const queries = {
     ORDER BY f.created_at DESC
   `),
   insertFault: db.prepare(`
-    INSERT INTO faults (machine_id, user_name, user_role, category, severity, description)
-    VALUES (@machine_id, @user_name, @user_role, @category, @severity, @description)
+    INSERT INTO faults (machine_id, user_name, user_role, category, severity, description, screenshot_taken, fault_codes)
+    VALUES (@machine_id, @user_name, @user_role, @category, @severity, @description, @screenshot_taken, @fault_codes)
   `),
   resolveFault: db.prepare(`
     UPDATE faults SET status='resolved', resolved_by=@resolved_by,

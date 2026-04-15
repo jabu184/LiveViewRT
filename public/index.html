@@ -86,7 +86,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .stat-btn{padding:5px 13px;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface);color:var(--text2);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all .13s;white-space:nowrap}
 .stat-btn:hover{background:var(--bg3);color:var(--text)}
 .stat-btn.current{border-width:2px}
-.stat-btn[data-s="available"].current{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+.stat-btn[data-s="treatment"].current{background:var(--green-bg);border-color:var(--green);color:var(--green)}
+.stat-btn[data-s="available"].current{background:var(--blue-bg);border-color:var(--blue);color:var(--blue)}
 .stat-btn[data-s="on"].current{background:var(--blue-bg);border-color:var(--blue);color:var(--blue)}
 .stat-btn[data-s="qa"].current{background:var(--purple-bg);border-color:var(--purple);color:var(--purple)!important}
 .stat-btn[data-s="service"].current{background:var(--amber-bg);border-color:var(--amber);color:var(--amber)!important}
@@ -194,6 +195,26 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .cat-list-item:hover { background:rgba(0,0,0,0.04); color:var(--text); }
 .cat-list-item.active { background:var(--blue-bg); color:var(--blue); font-weight:600; }
 
+#releaseNotesContainer ul {
+  list-style-type: none;
+  padding-left: 0;
+  margin-top: 8px;
+}
+#releaseNotesContainer li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6em;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+#releaseNotesContainer li::before {
+  content: "•";
+  color: var(--blue);
+  font-weight: bold;
+  font-size: 1.1em;
+  line-height: inherit;
+}
+
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 </style>
@@ -201,7 +222,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 <body>
 
 <header class="app-header">
-  <div class="logo" onclick="openModal('aboutModal')"><img src="LiveViewRTLogo.png" alt="LiveViewRT Logo" style="height:26px; width:auto; display:block"></div>
+  <div class="logo" onclick="openAboutModal()"><img src="LiveViewRTLogo.png" alt="LiveViewRT Logo" style="height:26px; width:auto; display:block"></div>
   <nav class="app-nav">
     <button class="nav-btn active" id="navOverview" onclick="showPage('overview')">Overview</button>
     <button class="nav-btn" id="navAdmin" onclick="showPage('admin')">Admin / Reports</button>
@@ -228,9 +249,15 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
           <tbody id="allActivityBody"></tbody></table>
         </div>
       </div>
-      <div class="card">
-        <div class="card-head">Active Faults</div>
-        <div class="card-body" style="padding-top:10px" id="activeFaultsEl"></div>
+      <div class="card" style="padding-bottom:10px">
+        <div class="card-head" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Active Faults</span>
+          <div id="overview-fault-buttons" style="display: none;">
+            <button class="btn btn-sm" onclick="selectAllFaults('overview')">Select All</button>
+            <button id="overviewBulkAckBtn" class="btn btn-sm btn-success" style="margin-left: 8px;" onclick="acknowledgeSelectedFaults('overview')" disabled>Acknowledge Selected</button>
+          </div>
+        </div>
+        <div class="card-body" style="padding-top:0" id="activeFaultsEl"></div>
       </div>
     </div>
 
@@ -257,6 +284,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       </div>
       <div id="atab-faults" class="tab-pane active">
         <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+          <input id="faultCodeSearch" placeholder="Search fault codes..." oninput="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:150px">
           <input id="faultSearch" placeholder="Search faults..." oninput="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:150px">
           <select id="faultFilterMachine" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px"><option value="">All Machines</option></select>
           <select id="faultFilterCategory" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px"><option value="">All Categories</option></select>
@@ -268,6 +296,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
             <option value="desc">Newest First</option><option value="asc">Oldest First</option>
           </select>
           <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="faultFilterUnresolved" onchange="renderAdminFaults()" checked style="width:auto">Open Only</label>
+          <button class="btn" style="margin-left:auto" onclick="selectAllFaults()">Select All</button>
+          <button id="adminBulkAckBtn" class="btn btn-success" onclick="acknowledgeSelectedFaults()" disabled>Acknowledge Selected</button>
         </div>
         <div id="adminFaultList"></div>
       </div>
@@ -413,6 +443,18 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       <div class="form-group"><label>Severity <span style="color:var(--red)">*</span></label><select id="faultSeverity"></select></div>
     </div>
     <div class="form-group"><label>Description <span style="color:var(--red)">*</span></label><textarea id="faultDesc" placeholder="Error codes, symptoms, conditions&hellip;"></textarea></div>
+    <div class="form-group" style="margin-top:12px">
+        <label>Fault Codes (optional)</label>
+        <div style="display:flex; gap:8px;">
+            <input id="faultCodeInput" placeholder="Type code and press Add..." onkeypress="if(event.key==='Enter'){addFaultCode(); event.preventDefault();}" style="flex:1">
+            <button class="btn" type="button" onclick="addFaultCode()">Add</button>
+        </div>
+        <div id="faultCodeList" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
+    </div>
+    <div class="form-group" style="flex-direction:row; align-items:center; gap:8px; margin-bottom: 20px;">
+        <input type="checkbox" id="faultScreenshot" style="width:auto">
+        <label for="faultScreenshot" style="margin:0; cursor:pointer">Screenshot taken</label>
+    </div>
     <div class="form-group"><label>Change Machine Status</label><select id="faultStatusChange"><option value="">No change</option><option value="breakdown">Breakdown</option><option value="service">Service</option><option value="qa">QA / Physics</option></select></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('faultModal')">Cancel</button>
@@ -445,6 +487,20 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('statusConfirmModal')">Cancel</button>
       <button class="btn btn-primary" onclick="confirmStatusChange()">Apply Change</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK ACKNOWLEDGE MODAL -->
+<div class="modal-overlay" id="bulkAcknowledgeModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head"><h2>Acknowledge Multiple Faults</h2><button class="modal-close" onclick="closeModal('bulkAcknowledgeModal')">&#10005;</button></div>
+    <input type="hidden" id="bulkAcknowledgeIds">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px" id="bulkAcknowledgeDesc"></p>
+    <div class="form-group"><label>Acknowledged By <span style="color:var(--red)">*</span></label><input id="bulkAcknowledgeUser" placeholder="Your name"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn" onclick="closeModal('bulkAcknowledgeModal')">Cancel</button>
+      <button class="btn btn-success" onclick="submitBulkAcknowledge()">Acknowledge All</button>
     </div>
   </div>
 </div>
@@ -491,7 +547,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       <input type="checkbox" id="rbApplyClinicalHours" onchange="recalculateBreakdownTime()" style="width:auto">
       <label id="rbApplyClinicalLabel" for="rbApplyClinicalHours" style="margin:0;cursor:pointer">Apply clinical hours (Mon-Fri, 7am-8pm)</label>
     </div>
-    <div class="form-group"><label>Subsequent Machine Status</label><select id="rbNextStatus"><option value="available">Clinical</option><option value="qa">QA / Physics</option><option value="service">Service</option><option value="on">On</option><option value="offline">Offline</option></select></div>
+    <div class="form-group"><label>Subsequent Machine Status</label><select id="rbNextStatus"><option value="treatment">Clinical</option><option value="qa">QA / Physics</option><option value="service">Service</option><option value="offline">Offline</option></select></div>
     <div class="form-group"><label>Notes / Resolution details</label><textarea id="rbNotes" placeholder="Optional" style="min-height:56px"></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('resolveBreakdownModal')">Cancel</button>
@@ -508,10 +564,9 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="form-group"><label>Your Name <span style="color:var(--red)">*</span></label><input id="ctUser" placeholder="Required to confirm"></div>
     <div class="form-group"><label>Subsequent Machine Status</label>
       <select id="ctNextStatus">
-        <option value="available">Clinical</option>
+        <option value="treatment">Clinical</option>
         <option value="qa">QA / Physics</option>
         <option value="service">Service</option>
-        <option value="on">On</option>
         <option value="offline">Offline</option>
       </select>
     </div>
@@ -578,6 +633,36 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
   </div>
 </div>
 
+<!-- EDIT FAULT MODAL -->
+<div class="modal-overlay" id="editFaultModal">
+  <div class="modal">
+    <div class="modal-head"><h2>Edit Fault Details</h2><button class="modal-close" onclick="closeModal('editFaultModal')">&#10005;</button></div>
+    <input type="hidden" id="editFaultId">
+    <div class="form-row">
+      <div class="form-group"><label>Category <span style="color:var(--red)">*</span></label><select id="editFaultCategory"></select></div>
+      <div class="form-group"><label>Severity <span style="color:var(--red)">*</span></label><select id="editFaultSeverity"></select></div>
+    </div>
+    <div class="form-group"><label>Description <span style="color:var(--red)">*</span></label><textarea id="editFaultDesc" placeholder="Error codes, symptoms, conditions&hellip;"></textarea></div>
+    <div class="form-group" id="editFaultDowntimeGroup" style="display:none;">
+        <label>Downtime (h)</label>
+        <input type="number" step="0.01" id="editFaultDowntime">
+    </div>
+    <div class="form-group">
+        <label>Fault Codes</label>
+        <div style="display:flex; gap:8px;">
+            <input id="editFaultCodeInput" placeholder="Type code and press Add..." onkeypress="if(event.key==='Enter'){addEditFaultCode(); event.preventDefault();}" style="flex:1">
+            <button class="btn" type="button" onclick="addEditFaultCode()">Add</button>
+        </div>
+        <div id="editFaultCodeList" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;"></div>
+    </div>
+    <div class="form-group" style="flex-direction:row; align-items:center; gap:8px;"><input type="checkbox" id="editFaultScreenshot" style="width:auto"><label for="editFaultScreenshot" style="margin:0; cursor:pointer">Screenshot taken</label></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn" onclick="closeModal('editFaultModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEditFault()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- ADMIN AUTH MODAL -->
 <div class="modal-overlay" id="adminAuthModal">
   <div class="modal" style="max-width:300px">
@@ -617,15 +702,22 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 
 <!-- ABOUT MODAL -->
 <div class="modal-overlay" id="aboutModal">
-  <div class="modal" style="max-width:300px">
+  <div class="modal" style="max-width:420px">
     <div class="modal-head" style="justify-content:flex-end;margin-bottom:10px"><button class="modal-close" onclick="closeModal('aboutModal')">&#10005;</button></div>
-    <div style="text-align:center;padding:10px 0 20px">
-      <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:240px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.2</p>
+    <div style="text-align:center;padding:0 0 20px">
+      <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:300px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.3</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
-      <p style="font-size:13px;color:var(--text3)">April 2026</p>
+      <p style="font-size:13px;color:var(--text3);margin-bottom:20px">April 2026</p>
+
+      <div id="releaseNotesToggle" onclick="toggleReleaseNotes()" style="font-size:13px; font-weight:500; color:var(--blue); cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+        Release Notes <span id="rnChevron">&#9660;</span>
+      </div>
+      <div id="releaseNotesContainer" style="display:none; text-align:left; font-size:12px; color:var(--text2); border-top: 1px solid var(--border); padding:16px 20px 0; margin-top: 16px;">
+        <!-- Release notes will be injected here -->
+      </div>
     </div>
-    <div style="display:flex;justify-content:center">
+    <div style="display:flex;justify-content:center;margin-top:16px">
       <button class="btn" style="width:100%" onclick="closeModal('aboutModal')">Close</button>
     </div>
   </div>
@@ -764,7 +856,8 @@ function getBdTime(m) {
 let currentPage='overview',currentMachine=null,pendingPower=null,pendingStatus=null,adminAuthenticated=false;
 const STATUS_META={
   on:{label:'On',cls:'b-on',dot:'#1d4ed8'},
-  available:{label:'Clinical',cls:'b-available',dot:'#0d7f4f'},
+  available:{label:'On',cls:'b-on',dot:'#1d4ed8'},
+  treatment:{label:'Clinical',cls:'b-available',dot:'#0d7f4f'},
   qa:{label:'QA / Physics',cls:'b-qa',dot:'#6d28d9'},
   service:{label:'Service',cls:'b-service',dot:'#d97706'},
   maintenance:{label:'Service',cls:'b-service',dot:'#d97706'},
@@ -772,7 +865,7 @@ const STATUS_META={
   offline:{label:'Offline',cls:'b-offline',dot:'#64748b'}
 };
 const STATUS_OPTS=[
-  {id:'available',label:'Clinical'},
+  {id:'treatment',label:'Clinical'},
   {id:'qa',label:'QA / Physics'},
   {id:'service',label:'Service'},
   {id:'breakdown',label:'Breakdown'}
@@ -1041,7 +1134,18 @@ function refreshOverview(){
     `<tr><td class="mono-cell">${fmtDT(a.created_at)}</td><td><span class="tag">${a.machine_name||a.machine_id}</span></td><td>${a.activity}</td><td>${a.user_name}</td><td class="${roleClass(a.user_role)}">${a.user_role}</td><td style="color:var(--text2);max-width:180px">${a.notes||''}</td></tr>`
   ).join('')||'<tr><td colspan="6" class="empty">No activity yet</td></tr>';
   const open=state.faults.filter(f=>f.status==='open');
-  document.getElementById('activeFaultsEl').innerHTML=open.length?open.map(f=>faultRowHTML(f,true)).join(''):'<div class="empty">No active faults</div>';
+  document.getElementById('activeFaultsEl').innerHTML = open.length ? open.map(f => faultRowHTML(f, true)).join('') : '<div class="empty">No active faults</div>';
+  
+  const buttonContainer = document.getElementById('overview-fault-buttons');
+  if (buttonContainer) {
+    const ackableFaults = open.filter(f => {
+        const m=state.machines.find(x=>x.id===f.machine_id);
+        const isBreakdown=f.severity.includes('High')||f.severity.includes('Critical')||(m&&m.status==='breakdown'&&f.status==='open');
+        return !isBreakdown;
+    });
+    buttonContainer.style.display = ackableFaults.length > 0 ? 'block' : 'none';
+  }
+  updateBulkButtons();
 }
 
 function buildMachinePages(){
@@ -1051,6 +1155,10 @@ function buildMachinePages(){
 
 function refreshMachinePage(machineId){
   const m=state.machines.find(x=>x.id===machineId);if(!m)return;
+  const el=document.getElementById('page-'+machineId);if(!el)return;
+  const activeTabPane = el.querySelector('.tab-pane.active');
+  const activeTabId = activeTabPane ? activeTabPane.id : `mt-log-${machineId}`;
+
   const meta=STATUS_META[m.status]||STATUS_META.offline;
   const show=m.power||['breakdown','service','maintenance','offline'].includes(m.status);
   const bdStart=getBdTime(m);
@@ -1066,7 +1174,7 @@ function refreshMachinePage(machineId){
   const potentialHrs=getTotalWorkingHours(30);
   const bdCount=recentFaults.filter(f=>(f.severity&&(f.severity.includes('High')||f.severity.includes('Critical')))||f.downtime_hrs>0).length;
   const upPct=Math.max(0,Math.min(100,100-(recentDt/potentialHrs*100))).toFixed(0);
-  const statusBtns=STATUS_OPTS.map(o=>{const dis=m.status==='breakdown'||(!m.power&&['available','qa'].includes(o.id));return`<button class="stat-btn ${o.id===m.status?'current':''}" data-s="${o.id}" ${dis?'disabled style="opacity:0.5;cursor:not-allowed"':''} onclick="requestStatusChange('${machineId}','${o.id}')">${o.label}</button>`}).join('');
+  const statusBtns=STATUS_OPTS.map(o=>{const dis=m.status==='breakdown'||(!m.power&&['treatment','qa'].includes(o.id));return`<button class="stat-btn ${o.id===m.status?'current':''}" data-s="${o.id}" ${dis?'disabled style="opacity:0.5;cursor:not-allowed"':''} onclick="requestStatusChange('${machineId}','${o.id}')">${o.label}</button>`}).join('');
   const concessionsHtml=mConcessions.map(c=>{
     const isOverdue=c.review_by&&(new Date(c.review_by)<new Date(new Date().toDateString()));
     const revHtml=c.review_by?`<span style="margin-left:8px;font-size:11px;opacity:0.9;${isOverdue?'color:var(--red);font-weight:bold;':''}"><span style="margin-right:3px">&#8987;</span>Review by ${fmtD(c.review_by)}${isOverdue?' (OVERDUE)':''}</span>`:'';
@@ -1082,7 +1190,6 @@ function refreshMachinePage(machineId){
   } else if (m.status === 'service') {
     actionBtn = `<div style="margin-left:auto;display:flex;align-items:center"><button class="btn btn-success" style="font-weight:600" onclick="requestCompletion('${machineId}', 'Service')">&#10003; Mark Service As Complete</button></div>`;
   }
-  const el=document.getElementById('page-'+machineId);if(!el)return;
   el.innerHTML=`
     <div class="machine-control">
       <div class="mc-top">
@@ -1124,7 +1231,10 @@ function refreshMachinePage(machineId){
       </div>
     </div>
     <div id="mt-faults-${machineId}" class="tab-pane">
-      <div class="section-hd"><span>Fault History</span><button class="btn btn-sm btn-danger" onclick="openFaultFor('${machineId}')">+ Report Fault</button></div>
+      <div class="section-hd">
+        <span>Fault History</span>
+        <div><button class="btn btn-sm" style="margin-right:8px" onclick="selectAllFaults('${machineId}')">Select All</button><button id="machineBulkAckBtn-${machineId}" class="btn btn-sm btn-success" style="margin-right:8px" onclick="acknowledgeSelectedFaults('${machineId}')" disabled>Acknowledge Selected</button><button class="btn btn-sm btn-danger" onclick="openFaultFor('${machineId}')">+ Report Fault</button></div>
+      </div>
       ${mFaults.length?mFaults.map(f=>faultRowHTML(f,false)).join(''):'<div class="empty">No faults recorded</div>'}
     </div>
     <div id="mt-breakdowns-${machineId}" class="tab-pane">
@@ -1138,24 +1248,46 @@ function refreshMachinePage(machineId){
         </table>
       </div></div>
     </div>`;
+  
+  const newActiveBtn = document.querySelector(`#page-${machineId} .tabs .tab[onclick*="'${activeTabId}'"]`);
+  if (newActiveBtn) {
+    el.querySelector('.tabs .tab.active')?.classList.remove('active');
+    el.querySelector('.tab-pane.active')?.classList.remove('active');
+    switchMTab(newActiveBtn, activeTabId);
+  }
 }
 
 function faultRowHTML(f,showMachine){
   const m=state.machines.find(x=>x.id===f.machine_id);
   const isBreakdown=f.severity.includes('High')||f.severity.includes('Critical')||(m&&m.status==='breakdown'&&f.status==='open');
   const open=f.status==='open',sevColor=isBreakdown?'var(--red)':f.severity.includes('Medium')?'var(--amber)':'var(--blue)';
-  return`<div class="fault-row">
+  const checkbox = (open && !isBreakdown) ? `<input type="checkbox" class="fault-select-cb" value="${f.id}" style="margin-right:8px;transform:scale(1.2);flex-shrink:0" onchange="updateBulkButtons()">` : `<div style="width:25px;flex-shrink:0"></div>`;
+  const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
+  const codesHtml = codes.length > 0 ? codes.map(c => `<span class="tag" style="background:var(--blue-bg);color:var(--blue);margin-right:4px;cursor:pointer" onclick="filterByCode('${c}'); event.stopPropagation();" title="Click to filter by this code">${c}</span>`).join('') : '';
+  const screenshotHtml = f.screenshot_taken ? `<span class="tag" style="background:var(--green-bg);color:var(--green);">&#128247; Screenshot</span>` : '';
+  return`<div class="fault-row" style="align-items:center">
+    ${checkbox}
     <div class="fault-icon" style="background:${open?'var(--red-bg)':'var(--green-bg)'};color:${open?'var(--red)':'var(--green)'}">${open?'&#9888;':'&#10003;'}</div>
     <div class="fault-info"><h4>${showMachine?`<span class="tag">${f.machine_name||f.machine_id}</span> &nbsp;`:''}${f.category} <span style="color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px">${f.severity}</span></h4>
     <p>${f.description}</p>
+    ${codes.length || f.screenshot_taken ? `<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">${codesHtml}${screenshotHtml}</div>` : ''}
     <div style="margin-top:5px;font-size:11px;color:var(--text3)">${f.user_name} (${f.user_role}) &middot; ${fmtD(f.created_at)}${f.resolved_at?` &middot; ${isBreakdown?'Resolved':'Acknowledged'} by ${f.resolved_by} on ${fmtD(f.resolved_at)}${f.downtime_hrs ? ` &middot; ${Number(f.downtime_hrs).toFixed(2)}h downtime` : ''}`:''}</div>
     </div>
     <div class="fault-meta" style="display:flex;align-items:center;gap:10px">
       <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:${open?'var(--red)':'var(--green)'}">${open?'OPEN':(isBreakdown?'RESOLVED':'ACKNOWLEDGED')}</span>
+      ${(currentPage === 'admin' || !showMachine) ? `<button class="btn btn-sm" style="padding:2px 8px;" onclick="openEditFault(${f.id})">Edit</button>` : ''}
       ${open?`<button class="btn btn-success btn-sm" onclick="openResolve(${f.id})">${isBreakdown?'Resolve':'Acknowledge'}</button>`:''}
       ${showMachine?`<button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="deleteFaultRecord(${f.id})" title="Delete Fault">&#10005;</button>`:''}
     </div>
   </div>`;
+}
+
+function filterByCode(code) {
+  showPage('admin');
+  const btn = document.querySelector('#page-admin .tabs .tab');
+  if (btn) switchAdminTab(btn, 'atab-faults');
+  document.getElementById('faultCodeSearch').value = code;
+  renderAdminFaults();
 }
 
 function showPage(name){
@@ -1172,6 +1304,7 @@ function showPage(name){
   document.getElementById(name==='admin'?'navAdmin':'navOverview')?.classList.add('active');
   currentMachine=null;currentPage=name;buildBanner();
   if(name==='admin')loadAdminData();
+  updateBulkButtons();
 }
 
 function verifyAdminPwd() {
@@ -1189,7 +1322,7 @@ function showMachine(machineId){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+machineId)?.classList.add('active');
   ['navOverview','navAdmin'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
-  currentMachine=machineId;currentPage=machineId;buildBanner();
+  currentMachine=machineId;currentPage=machineId;buildBanner();updateBulkButtons();
 }
 function switchAdminTab(btn,tabId){
   btn.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
@@ -1260,8 +1393,29 @@ function openFaultFor(machineId){
   document.getElementById('faultSeverity').value=state.settings?.default_fault_severity||'Low';
   document.getElementById('faultStatusChange').value='';
   document.getElementById('faultDesc').value='';
+  document.getElementById('faultCodeList').innerHTML = '';
+  document.getElementById('faultCodeInput').value = '';
+  document.getElementById('faultScreenshot').checked = false;
   openModal('faultModal');
   setTimeout(()=>document.getElementById('faultDesc').focus(),100);
+}
+
+function addFaultCode() {
+    const input = document.getElementById('faultCodeInput');
+    const code = input.value.trim();
+    if (code) {
+        const list = document.getElementById('faultCodeList');
+        const codeEl = document.createElement('span');
+        codeEl.className = 'tag';
+        codeEl.style.cursor = 'pointer';
+        codeEl.style.background = 'var(--blue-bg)';
+        codeEl.style.color = 'var(--blue)';
+        codeEl.textContent = code;
+        codeEl.onclick = () => codeEl.remove();
+        list.appendChild(codeEl);
+        input.value = '';
+        input.focus();
+    }
 }
 
 async function submitLog(){
@@ -1271,7 +1425,10 @@ async function submitLog(){
   document.getElementById('logUser').value='';document.getElementById('logNotes').value='';toast('Activity logged','success');
 }
 async function submitFault(){
-  const body={machine_id:document.getElementById('faultMachine').value,user_name:document.getElementById('faultUser').value.trim(),user_role:document.getElementById('faultRole').value,category:document.getElementById('faultCategory').value,severity:document.getElementById('faultSeverity').value,description:document.getElementById('faultDesc').value.trim(),status_change:document.getElementById('faultStatusChange').value||null};
+  const faultCodes = [...document.querySelectorAll('#faultCodeList .tag')].map(el => el.textContent);
+  const body={machine_id:document.getElementById('faultMachine').value,user_name:document.getElementById('faultUser').value.trim(),user_role:document.getElementById('faultRole').value,category:document.getElementById('faultCategory').value,severity:document.getElementById('faultSeverity').value,description:document.getElementById('faultDesc').value.trim(),status_change:document.getElementById('faultStatusChange').value||null,
+    screenshot_taken: document.getElementById('faultScreenshot').checked ? 1 : 0,
+    fault_codes: JSON.stringify(faultCodes)};
   if(!body.user_name||!body.description){toast('Name and description required','error');return}
   await api('POST','/faults',body);closeModal('faultModal');
   document.getElementById('faultUser').value='';document.getElementById('faultDesc').value='';toast('Fault reported','error');
@@ -1311,6 +1468,151 @@ async function submitResolve(){
   const f=state.faults.find(x=>x.id===parseInt(document.getElementById('resolveFaultId').value));
   const isBreakdown=f&&(f.severity.includes('High')||f.severity.includes('Critical'));
   closeModal('resolveModal');toast(isBreakdown?'Breakdown resolved':'Fault acknowledged','success');
+}
+
+function updateBulkButtons() {
+  let container, btn;
+  if (currentPage === 'admin') {
+    container = document.getElementById('adminFaultList');
+    btn = document.getElementById('adminBulkAckBtn');
+  } else if (currentPage === 'overview') {
+    container = document.getElementById('activeFaultsEl');
+    btn = document.getElementById('overviewBulkAckBtn');
+  } else if (currentMachine) {
+    container = document.getElementById(`mt-faults-${currentMachine}`);
+    btn = document.getElementById(`machineBulkAckBtn-${currentMachine}`);
+  }
+
+  if (container && btn) {
+    const selected = container.querySelectorAll('.fault-select-cb:checked').length;
+    btn.disabled = selected === 0;
+    btn.textContent = `Acknowledge Selected${selected > 0 ? ' ('+selected+')' : ''}`;
+  }
+}
+
+function selectAllFaults(pageId) {
+  let container;
+  if (pageId === 'overview') {
+    container = document.getElementById('activeFaultsEl');
+  } else {
+    container = pageId ? document.getElementById('mt-faults-' + pageId) : document.getElementById('adminFaultList');
+  }
+  if (!container) return;
+  const checkboxes = container.querySelectorAll('.fault-select-cb');
+  if (checkboxes.length === 0) return;
+  const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+  updateBulkButtons();
+}
+
+function acknowledgeSelectedFaults(pageId) {
+  let container;
+  if (pageId === 'overview') {
+    container = document.getElementById('activeFaultsEl');
+  } else {
+    container = pageId ? document.getElementById('mt-faults-' + pageId) : document.getElementById('adminFaultList');
+  }
+  if (!container) return;
+  const selectedIds = [...container.querySelectorAll('.fault-select-cb:checked')].map(cb => parseInt(cb.value));
+  if (selectedIds.length === 0) { toast('No faults selected', 'info'); return; }
+  document.getElementById('bulkAcknowledgeIds').value = JSON.stringify(selectedIds);
+  document.getElementById('bulkAcknowledgeDesc').textContent = `You are about to acknowledge ${selectedIds.length} fault(s). Please enter your name to confirm.`;
+  document.getElementById('bulkAcknowledgeUser').value = '';
+  openModal('bulkAcknowledgeModal');
+  setTimeout(() => document.getElementById('bulkAcknowledgeUser').focus(), 100);
+}
+
+async function submitBulkAcknowledge() {
+  const ids = JSON.parse(document.getElementById('bulkAcknowledgeIds').value);
+  const user = document.getElementById('bulkAcknowledgeUser').value.trim();
+  if (!user) { toast('Please enter your name', 'error'); return; }
+  const res = await api('POST', '/faults/bulk-acknowledge', { ids, resolved_by: user });
+  if (res) { toast(`${res.acknowledged} fault(s) acknowledged.`, 'success'); closeModal('bulkAcknowledgeModal'); }
+}
+
+function openEditFault(id) {
+  const f = state.faults.find(x => x.id === id);
+  if (!f) return;
+
+  document.getElementById('editFaultId').value = id;
+
+  const downtimeGroup = document.getElementById('editFaultDowntimeGroup');
+  const isResolvedBreakdown = f.status === 'resolved' && (f.severity.includes('High') || f.severity.includes('Critical') || (f.downtime_hrs !== null && f.downtime_hrs > 0));
+  if (isResolvedBreakdown) {
+    downtimeGroup.style.display = 'block';
+    document.getElementById('editFaultDowntime').value = f.downtime_hrs || 0;
+  } else {
+    downtimeGroup.style.display = 'none';
+  }
+  
+  const catEl = document.getElementById('editFaultCategory');
+  catEl.innerHTML = (state.settings?.fault_categories ? JSON.parse(state.settings.fault_categories) : []).map(c => `<option value="${c}">${c}</option>`).join('');
+  catEl.value = f.category;
+
+  const sevEl = document.getElementById('editFaultSeverity');
+  sevEl.innerHTML = (state.settings?.fault_severities ? JSON.parse(state.settings.fault_severities) : []).map(s => `<option value="${s}">${s}</option>`).join('');
+  sevEl.value = f.severity;
+
+  document.getElementById('editFaultDesc').value = f.description;
+  document.getElementById('editFaultScreenshot').checked = f.screenshot_taken === 1;
+
+  const codeList = document.getElementById('editFaultCodeList');
+  codeList.innerHTML = '';
+  const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
+  codes.forEach(code => {
+    const codeEl = document.createElement('span');
+    codeEl.className = 'tag';
+    codeEl.style.cursor = 'pointer';
+    codeEl.style.background = 'var(--blue-bg)';
+    codeEl.style.color = 'var(--blue)';
+    codeEl.textContent = code;
+    codeEl.onclick = () => codeEl.remove();
+    codeList.appendChild(codeEl);
+  });
+  document.getElementById('editFaultCodeInput').value = '';
+
+  openModal('editFaultModal');
+}
+
+function addEditFaultCode() {
+    const input = document.getElementById('editFaultCodeInput');
+    const code = input.value.trim();
+    if (code) {
+        const list = document.getElementById('editFaultCodeList');
+        const codeEl = document.createElement('span');
+        codeEl.className = 'tag';
+        codeEl.style.cursor = 'pointer';
+        codeEl.style.background = 'var(--blue-bg)';
+        codeEl.style.color = 'var(--blue)';
+        codeEl.textContent = code;
+        codeEl.onclick = () => codeEl.remove();
+        list.appendChild(codeEl);
+        input.value = '';
+        input.focus();
+    }
+}
+
+async function submitEditFault() {
+  const id = document.getElementById('editFaultId').value;
+  const faultCodes = [...document.querySelectorAll('#editFaultCodeList .tag')].map(el => el.textContent);
+  const body = {
+    category: document.getElementById('editFaultCategory').value,
+    severity: document.getElementById('editFaultSeverity').value,
+    description: document.getElementById('editFaultDesc').value.trim(),
+    screenshot_taken: document.getElementById('editFaultScreenshot').checked ? 1 : 0,
+    fault_codes: JSON.stringify(faultCodes)
+  };
+  const downtimeGroup = document.getElementById('editFaultDowntimeGroup');
+  if (downtimeGroup.style.display === 'block') {
+    body.downtime_hrs = parseFloat(document.getElementById('editFaultDowntime').value) || 0;
+  }
+
+  if (!body.description) { toast('Description is required', 'error'); return; }
+  const res = await api('PUT', `/faults/${id}`, body);
+  if (res) {
+    toast('Fault updated successfully', 'success');
+    closeModal('editFaultModal');
+  }
 }
 
 function openConcessionFor(machineId){
@@ -1518,8 +1820,8 @@ async function requestBreakdownResolve(machineId, faultId = null){
   document.getElementById('rbApplyClinicalHours').checked=true;
   const m=state.machines.find(x=>x.id===machineId);
   let defaultStatus = m.status;
-  if (m.status === 'breakdown') defaultStatus = m.power ? 'available' : 'offline';
-  if (!['available','qa','service','on','offline'].includes(defaultStatus)) defaultStatus = 'available';
+  if (m.status === 'breakdown') defaultStatus = m.power ? 'treatment' : 'offline';
+  if (!['treatment','available','qa','service','on','offline'].includes(defaultStatus)) defaultStatus = 'treatment';
   document.getElementById('rbNextStatus').value=defaultStatus;
   
   let f = null;
@@ -1592,7 +1894,7 @@ function requestCompletion(machineId, taskName) {
   document.getElementById('ctUser').value = '';
   document.getElementById('ctNotes').value = '';
   const m = state.machines.find(x => x.id === machineId);
-  document.getElementById('ctNextStatus').value = (m && m.power) ? 'available' : 'offline';
+  document.getElementById('ctNextStatus').value = (m && m.power) ? 'treatment' : 'offline';
   openModal('completeTaskModal');
   setTimeout(()=>document.getElementById('ctUser').focus(), 100);
 }
@@ -1698,25 +2000,26 @@ function renderUtilTables() {
   
   let arr1 = [...summary];
   arr1.sort((a,b) => {
-    let valA = u1Col === 'name' ? a.machine.name : ((a.status_times.on||0)+(a.status_times.available||0)+(a.status_times.qa||0)+(a.status_times.service||0)+(a.status_times.maintenance||0)+(a.status_times.breakdown||0));
-    let valB = u1Col === 'name' ? b.machine.name : ((b.status_times.on||0)+(b.status_times.available||0)+(b.status_times.qa||0)+(b.status_times.service||0)+(b.status_times.maintenance||0)+(b.status_times.breakdown||0));
+    let valA = u1Col === 'name' ? a.machine.name : a.total_clinical_hours;
+    let valB = u1Col === 'name' ? b.machine.name : b.total_clinical_hours;
     if (u1Col === 'name') return u1Asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
     return u1Asc ? valA - valB : valB - valA;
   });
   const tb1 = document.getElementById('util1Tbody');
   if (tb1) {
     tb1.innerHTML = arr1.map(s => {
-      const st = s.status_times;
-      const totalHrs = (st.on||0) + (st.available||0) + (st.qa||0) + (st.service||0) + (st.maintenance||0) + (st.breakdown||0);
+      const gt = s.grouped_times || {};
+      const totalHrs = s.total_clinical_hours || 0;
       let barHtml = '';
       if (totalHrs > 0) {
         const getW = hrs => (hrs / totalHrs * 100).toFixed(2) + '%';
         barHtml = `<div style="display:flex;height:12px;border-radius:4px;overflow:hidden;background:var(--bg3);box-shadow:inset 0 1px 3px rgba(0,0,0,.1)">
-          ${st.available > 0 ? `<div style="width:${getW(st.available)};background:var(--green)" title="Clinical: ${st.available.toFixed(1)}h"></div>` : ''}
-          ${st.qa > 0 ? `<div style="width:${getW(st.qa)};background:var(--purple)" title="QA / Physics: ${st.qa.toFixed(1)}h"></div>` : ''}
-          ${(st.service||0) + (st.maintenance||0) > 0 ? `<div style="width:${getW((st.service||0) + (st.maintenance||0))};background:var(--amber)" title="Service: ${((st.service||0) + (st.maintenance||0)).toFixed(1)}h"></div>` : ''}
-          ${st.breakdown > 0 ? `<div style="width:${getW(st.breakdown)};background:var(--red)" title="Breakdown: ${st.breakdown.toFixed(1)}h"></div>` : ''}
-          ${st.on > 0 ? `<div style="width:${getW(st.on)};background:var(--blue)" title="On: ${st.on.toFixed(1)}h"></div>` : ''}
+          ${gt.treatment > 0 ? `<div style="width:${getW(gt.treatment)};background:var(--green)" title="Clinical: ${gt.treatment.toFixed(1)}h"></div>` : ''}
+          ${gt.available > 0 ? `<div style="width:${getW(gt.available)};background:var(--blue)" title="On: ${gt.available.toFixed(1)}h"></div>` : ''}
+          ${gt.qa > 0 ? `<div style="width:${getW(gt.qa)};background:var(--purple)" title="QA / Physics: ${gt.qa.toFixed(1)}h"></div>` : ''}
+          ${gt.service > 0 ? `<div style="width:${getW(gt.service)};background:var(--amber)" title="Service: ${gt.service.toFixed(1)}h"></div>` : ''}
+          ${gt.breakdown > 0 ? `<div style="width:${getW(gt.breakdown)};background:var(--red)" title="Breakdown: ${gt.breakdown.toFixed(1)}h"></div>` : ''}
+          ${gt.offline > 0 ? `<div style="width:${getW(gt.offline)};background:var(--slate)" title="Offline: ${gt.offline.toFixed(1)}h"></div>` : ''}
         </div>`;
       } else {
         barHtml = `<div style="font-size:11px;color:var(--text3)">No valid time recorded</div>`;
@@ -1730,10 +2033,9 @@ function renderUtilTables() {
   }
 
   let arr2 = summary.map(s => {
-    const st = s.status_times;
-    const clinicalHours = (st.available||0)+(st.treatment||0);
-    const trackedActiveHours = (st.on||0)+(st.available||0)+(st.treatment||0)+(st.qa||0)+(st.service||0)+(st.maintenance||0)+(st.breakdown||0);
-    const pct = trackedActiveHours > 0 ? Math.min(100, (clinicalHours/trackedActiveHours)*100) : 0;
+    const gt = s.grouped_times || {};
+    const clinicalHours = (gt.treatment||0);
+    const pct = s.total_clinical_hours > 0 ? Math.min(100, (clinicalHours/s.total_clinical_hours)*100) : 0;
     return { name: s.machine.name, pct };
   });
   arr2.sort((a,b) => {
@@ -1748,7 +2050,7 @@ function renderUtilTables() {
         <div style="position:relative;width:68px;height:68px;margin-bottom:12px">
           <svg width="68" height="68" viewBox="0 0 36 36">
             <circle cx="18" cy="18" r="15.9155" fill="none" stroke="var(--border)" stroke-width="3"></circle>
-            <circle cx="18" cy="18" r="15.9155" fill="none" stroke="${col}" stroke-width="3" stroke-dasharray="${item.pct}, 100" stroke-dashoffset="25" stroke-linecap="round"></circle>
+            <circle cx="18" cy="18" r="15.9155" fill="none" stroke="${col}" stroke-width="3" stroke-dasharray="${item.pct >= 100 ? '100, 0' : `${item.pct}, 100`}" stroke-dashoffset="25" stroke-linecap="round"></circle>
           </svg>
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;color:${col}">${item.pct.toFixed(0)}%</div>
         </div>
@@ -1852,7 +2154,7 @@ function makeInteractiveLineGraph(seriesData, monthLabels) {
   return `<div style="position:relative; margin-top:20px; border-top:1px solid var(--border); padding-top:20px">${svg}${legendHtml}</div>`;
 }
 
-let catChartMachine = 'all';
+let catChartMachines = new Set(['all']);
 let catChartType = 'bd';
 
 function renderCategoryCharts() {
@@ -1860,6 +2162,10 @@ function renderCategoryCharts() {
   if (!container || !adminReport) return;
   
   const machines = state.machines.filter(m => !m.archived);
+
+  if (catChartMachines.has('all')) {
+    machines.forEach(m => catChartMachines.add(m.id));
+  }
 
   let html = `<div class="card" style="width:100%; display:flex; flex-direction:column; padding:0; overflow:hidden">
     <div class="card-head" style="margin-bottom:0; border-bottom:1px solid var(--border); padding:14px 16px; background:var(--surface)">
@@ -1874,11 +2180,11 @@ function renderCategoryCharts() {
         </div>
         <div style="font-size:10px; font-weight:600; text-transform:uppercase; color:var(--text3); margin-bottom:8px; letter-spacing:0.05em; font-family:var(--mono)">Machine</div>
         <div style="display:flex; flex-direction:column; max-height:280px; overflow-y:auto; padding-right:4px">
-          <div id="catM-all" class="cat-list-item ${catChartMachine==='all'?'active':''}" onclick="setCatChartMachine('all')">All Machines</div>
-          ${machines.map(m => `<div id="catM-${m.id}" class="cat-list-item ${catChartMachine===m.id?'active':''}" onclick="setCatChartMachine('${m.id}')">${m.name}</div>`).join('')}
+              <div id="catM-all" class="cat-list-item ${catChartMachines.has('all')?'active':''}" onclick="toggleCatChartMachine('all')">All Machines</div>
+              ${machines.map(m => `<div id="catM-${m.id}" class="cat-list-item ${catChartMachines.has(m.id)?'active':''}" onclick="toggleCatChartMachine('${m.id}')">${m.name}</div>`).join('')}
         </div>
       </div>
-      <div id="catChartBody" style="flex:1; padding:24px; min-height:280px; display:flex; align-items:center; justify-content:center; background:var(--surface)"></div>
+      <div id="catChartBody" style="flex:1; padding:24px; min-height:320px; display:flex; align-items:flex-start; justify-content:space-around; gap: 24px; flex-wrap:wrap; background:var(--surface)"></div>
     </div>
   </div>`;
   
@@ -1887,7 +2193,36 @@ function renderCategoryCharts() {
 }
 
 function setCatChartType(type) { catChartType = type; document.querySelectorAll('[id^="catT-"]').forEach(el => el.classList.remove('active')); document.getElementById('catT-' + type).classList.add('active'); updateCatChart(); }
-function setCatChartMachine(mId) { catChartMachine = mId; document.querySelectorAll('[id^="catM-"]').forEach(el => el.classList.remove('active')); document.getElementById('catM-' + mId).classList.add('active'); updateCatChart(); }
+
+function toggleCatChartMachine(mId) {
+  const allM = state.machines.filter(m => !m.archived).map(m => m.id);
+  if (mId === 'all') {
+    if (catChartMachines.has('all')) {
+      catChartMachines.clear();
+    } else {
+      catChartMachines.add('all');
+      allM.forEach(id => catChartMachines.add(id));
+    }
+  } else {
+    if (catChartMachines.has(mId)) {
+      catChartMachines.delete(mId);
+      catChartMachines.delete('all');
+    } else {
+      catChartMachines.add(mId);
+      if (allM.every(id => catChartMachines.has(id))) {
+        catChartMachines.add('all');
+      }
+    }
+  }
+
+  document.querySelectorAll('[id^="catM-"]').forEach(el => el.classList.remove('active'));
+  if (catChartMachines.has('all')) document.getElementById('catM-all')?.classList.add('active');
+  allM.forEach(id => {
+    if (catChartMachines.has(id)) document.getElementById('catM-' + id)?.classList.add('active');
+  });
+
+  updateCatChart();
+}
 
 function updateCatChart() {
   const body = document.getElementById('catChartBody');
@@ -1899,14 +2234,38 @@ function updateCatChart() {
   cats.forEach((c, i) => catColors[c] = colors[i % colors.length]);
   
   let faults = adminReport.faults;
-  if (catChartMachine !== 'all') faults = faults.filter(f => f.machine_id === catChartMachine);
+  if (!catChartMachines.has('all')) {
+    faults = faults.filter(f => catChartMachines.has(f.machine_id));
+  }
   if (catChartType === 'bd') faults = faults.filter(f => (f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) || f.downtime_hrs > 0);
   
   let tally = {};
   faults.forEach(f => { const c = cats.includes(f.category) ? f.category : 'Other'; tally[c] = (tally[c] || 0) + 1; });
-  const data = Object.keys(tally).map(k => ({ label: k, value: tally[k], color: catColors[k] || '#94a3b8' })).filter(d => d.value > 0);
+  const catData = Object.keys(tally).map(k => ({ label: k, value: tally[k], color: catColors[k] || '#94a3b8' })).filter(d => d.value > 0);
   
-  body.innerHTML = makeDonutChart(data);
+  let codeTally = {};
+  faults.forEach(f => {
+    if (f.fault_codes) {
+      try {
+        const codes = JSON.parse(f.fault_codes);
+        if (Array.isArray(codes)) {
+          codes.forEach(code => { codeTally[code] = (codeTally[code] || 0) + 1; });
+        }
+      } catch(e) {}
+    }
+  });
+  const codeData = Object.keys(codeTally).map((k, i) => ({ label: k, value: codeTally[k], color: colors[i % colors.length] })).filter(d => d.value > 0);
+
+  body.innerHTML = `
+    <div style="flex:1; min-width: 400px;">
+      <h3 style="text-align:center; font-size:12px; color:var(--text3); font-weight:500; margin-bottom:16px;">Breakdown by Category</h3>
+      ${makeDonutChart(catData)}
+    </div>
+    <div style="flex:1; min-width: 400px;">
+      <h3 style="text-align:center; font-size:12px; color:var(--text3); font-weight:500; margin-bottom:16px;">Breakdown by Fault Code</h3>
+      ${makeDonutChart(codeData)}
+    </div>
+  `;
 }
 
 function makeDonutChart(data) {
@@ -2055,10 +2414,11 @@ async function loadAdminData(){
       <div class="card-body" style="padding:0">
         <div style="display:flex;gap:12px;padding:12px 16px;font-size:11px;font-family:var(--mono);flex-wrap:wrap;border-bottom:1px solid var(--border)">
           <span style="color:var(--green)">&#9632; Clinical</span>
+          <span style="color:var(--blue)">&#9632; On</span>
           <span style="color:var(--purple)">&#9632; QA/Physics</span>
           <span style="color:var(--amber)">&#9632; Service</span>
           <span style="color:var(--red)">&#9632; Breakdown</span>
-          <span style="color:var(--blue)">&#9632; On</span>
+          <span style="color:var(--slate)">&#9632; Offline</span>
         </div>
         <table class="tbl" style="margin:0">
           <thead><tr>
@@ -2127,7 +2487,11 @@ async function editAudit(id) {
   document.getElementById('editAuditType').value = type;
   document.getElementById('editAuditSourceId').value = source ? source.id : '';
   
-  let html = '';
+  const dateObj = new Date((audit.created_at || '').replace(' ', 'T') + 'Z');
+  const pad = (n) => String(n).padStart(2, '0');
+  const dtValue = !isNaN(dateObj) ? `${dateObj.getFullYear()}-${pad(dateObj.getMonth()+1)}-${pad(dateObj.getDate())}T${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}` : '';
+  
+  let html = `<div class="form-group"><label>Date / Time <span style="color:var(--red)">*</span></label><input type="datetime-local" id="eaCreatedAt" value="${dtValue}"></div>`;
   if (type === 'activity_log' && source) {
     const acts = state.settings?.activity_categories ? JSON.parse(state.settings.activity_categories) : ['Treatment session','QA check','Service','Calibration','Inspection','Status change','Other'];
     let actOpts = acts.map(c => `<option value="${c}" ${source.activity===c?'selected':''}>${c}</option>`).join('');
@@ -2183,6 +2547,13 @@ async function submitEditAudit() {
   const body = { type, source_id };
   body.user_name = document.getElementById('eaUser').value.trim();
   if (!body.user_name) { toast('User name required', 'error'); return; }
+      
+      const rawDate = document.getElementById('eaCreatedAt').value;
+      if (rawDate) {
+        const d = new Date(rawDate);
+        if (!isNaN(d)) body.created_at = d.toISOString().replace('T', ' ').slice(0, 19);
+      }
+      
   if (type === 'activity_log') { body.activity = document.getElementById('eaActivity').value; body.notes = document.getElementById('eaNotes').value.trim(); }
   else if (type === 'status_history') { body.reason = document.getElementById('eaReason').value.trim(); body.detail = document.getElementById('eaDetail').value; }
   else if (type === 'faults') { body.category = document.getElementById('eaCategory').value; body.severity = document.getElementById('eaSeverity').value; body.description = document.getElementById('eaDesc').value.trim(); }
@@ -2235,7 +2606,14 @@ async function saveSecuritySettings(){
 
 function renderAdminFaults(){
   if(!adminReport||!adminReport.faults)return;
-  const search=document.getElementById('faultSearch').value.toLowerCase(),machine=document.getElementById('faultFilterMachine').value,category=document.getElementById('faultFilterCategory').value,severity=document.getElementById('faultFilterSeverity').value,unresolved=document.getElementById('faultFilterUnresolved').checked,sort=document.getElementById('faultSort').value,timeFilter=document.getElementById('faultFilterTime').value;
+  const search = document.getElementById('faultSearch').value.toLowerCase();
+  const codeSearch = document.getElementById('faultCodeSearch').value.toLowerCase();
+  const machine = document.getElementById('faultFilterMachine').value;
+  const category = document.getElementById('faultFilterCategory').value;
+  const severity = document.getElementById('faultFilterSeverity').value;
+  const unresolved = document.getElementById('faultFilterUnresolved').checked;
+  const sort = document.getElementById('faultSort').value;
+  const timeFilter = document.getElementById('faultFilterTime').value;
   const sevenDaysAgo=new Date();sevenDaysAgo.setDate(sevenDaysAgo.getDate()-7);
   let filtered=adminReport.faults.filter(f=>{
     if(timeFilter==='7days'&&new Date((f.created_at||'').replace(' ','T')+'Z')<sevenDaysAgo)return false;
@@ -2243,6 +2621,12 @@ function renderAdminFaults(){
     if(machine&&f.machine_id!==machine)return false;
     if(category&&f.category!==category)return false;
     if(severity&&f.severity!==severity)return false;
+    if(codeSearch){
+      try {
+        const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
+        if (!codes.some(c => c.toLowerCase().includes(codeSearch))) return false;
+      } catch(e) { return false; }
+    }
     if(search){
       const text=(f.description+' '+f.user_name+' '+(f.machine_name||f.machine_id)).toLowerCase();
       if(!text.includes(search))return false;
@@ -2251,6 +2635,7 @@ function renderAdminFaults(){
   });
   if(sort==='asc')filtered.reverse();
   document.getElementById('adminFaultList').innerHTML=filtered.length?filtered.map(f=>faultRowHTML(f,true)).join(''):'<div class="empty">No faults match criteria</div>';
+  updateBulkButtons();
 }
 
 function deleteFaultRecord(id){
@@ -2282,6 +2667,48 @@ async function api(method,path,body){
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m){cancelPower();cancelRestore();m.classList.remove('open')}})});
+
+function openAboutModal() {
+  openModal('aboutModal');
+  const container = document.getElementById('releaseNotesContainer');
+  const chevron = document.getElementById('rnChevron');
+  if (container) {
+    container.style.display = 'none';
+    container.innerHTML = '';
+  }
+  if (chevron) chevron.innerHTML = '&#9660;';
+}
+
+async function toggleReleaseNotes() {
+  const container = document.getElementById('releaseNotesContainer');
+  const chevron = document.getElementById('rnChevron');
+  if (!container) return;
+
+  if (container.style.display === 'none') {
+    container.style.display = 'block';
+    chevron.innerHTML = '&#9650;';
+    if (container.innerHTML.trim() === '') {
+      container.innerHTML = '<p style="font-size:12px; color:var(--text3)">Loading release notes...</p>';
+      try {
+        const response = await fetch('/api/release-notes');
+        if (response.ok) {
+          const text = await response.text();
+          const lines = text.split('\n').filter(line => line.trim().startsWith('-'));
+          const html = '<ul>' + lines.map(line => `<li>${line.trim().substring(1).trim()}</li>`).join('') + '</ul>';
+          container.innerHTML = html;
+        } else {
+          container.innerHTML = '<p style="font-size:12px; color:var(--red)">Could not load release notes.</p>';
+        }
+      } catch (e) {
+        container.innerHTML = '<p style="font-size:12px; color:var(--red)">Error fetching release notes.</p>';
+      }
+    }
+  } else {
+    container.style.display = 'none';
+    chevron.innerHTML = '&#9660;';
+  }
+}
+
 function openStationModal() {
   const current = localStorage.getItem('defaultMachine') || '';
   document.getElementById('stationSelect').value = current;
@@ -2317,6 +2744,8 @@ document.addEventListener('keydown', e => {
       else if (openM.id === 'powerModal') confirmPower();
       else if (openM.id === 'statusConfirmModal') confirmStatusChange();
       else if (openM.id === 'resolveModal') submitResolve();
+      else if (openM.id === 'editFaultModal') submitEditFault();
+      else if (openM.id === 'bulkAcknowledgeModal') submitBulkAcknowledge();
       else if (openM.id === 'resolveBreakdownModal') confirmBreakdownResolve();
       else if (openM.id === 'completeTaskModal') confirmTaskComplete();
       else if (openM.id === 'concessionModal') submitConcession();

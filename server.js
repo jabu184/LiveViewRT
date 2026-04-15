@@ -166,6 +166,14 @@ app.patch('/api/machines/:id/status', (req, res) => {
     return res.status(400).json({ error: 'Machine must be ON to set this status' });
   }
 
+  const displayStatus = {
+    none: 'OFF', on: 'On', available: 'On', treatment: 'Clinical',
+    qa: 'QA / Physics', service: 'Service', maintenance: 'Maintenance',
+    breakdown: 'Breakdown', offline: 'Offline'
+  };
+  const oldName = displayStatus[machine.status] || machine.status;
+  const newName = displayStatus[status] || status;
+
   queries.insertStatusHistory.run({
     machine_id: id, old_status: machine.status, new_status: status,
     old_power: machine.power, new_power: machine.power,
@@ -175,13 +183,13 @@ app.patch('/api/machines/:id/status', (req, res) => {
   queries.insertAudit.run({
     machine_id: id, user_name: changed_by,
     action: 'STATUS_CHANGE',
-    detail: `${machine.status} → ${status}${reason ? ': ' + reason : ''}`,
+    detail: `${oldName} → ${newName}${reason ? ': ' + reason : ''}`,
     ip_address: req.clientIp
   });
 
   const actInfo = queries.insertActivity.run({
     machine_id: id, user_name: changed_by, user_role: 'System',
-    activity: 'Status change', notes: `${machine.status} → ${status}${reason ? ' (' + reason + ')' : ''}`
+    activity: 'Status change', notes: `${oldName} → ${newName}${reason ? ' (' + reason + ')' : ''}`
   });
   const actEntry = db.prepare('SELECT a.*, m.name as machine_name FROM activity_log a JOIN machines m ON a.machine_id=m.id WHERE a.id=?').get(actInfo.lastInsertRowid);
   broadcast('activity_added', actEntry);
@@ -273,7 +281,7 @@ app.get('/api/faults', (req, res) => {
 
 // POST fault
 app.post('/api/faults', (req, res) => {
-  let { machine_id, user_name, user_role, category, severity, description, status_change } = req.body;
+  let { machine_id, user_name, user_role, category, severity, description, status_change, screenshot_taken, fault_codes } = req.body;
   if (!machine_id || !user_name || !user_role || !category || !severity || !description)
     return res.status(400).json({ error: 'All fault fields required' });
 
@@ -284,7 +292,7 @@ app.post('/api/faults', (req, res) => {
     severity = 'High';
   }
 
-  const info = queries.insertFault.run({ machine_id, user_name, user_role, category, severity, description });
+  const info = queries.insertFault.run({ machine_id, user_name, user_role, category, severity, description, screenshot_taken: screenshot_taken ? 1 : 0, fault_codes: fault_codes || null });
 
   if (status_change) {
     queries.insertStatusHistory.run({
@@ -329,6 +337,50 @@ app.delete('/api/faults/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// PUT edit fault
+app.put('/api/faults/:id', (req, res) => {
+  const { id } = req.params;
+  const { category, severity, description, screenshot_taken, fault_codes, downtime_hrs } = req.body;
+
+  const fault = db.prepare('SELECT * FROM faults WHERE id=?').get(id);
+  if (!fault) return res.status(404).json({ error: 'Not found' });
+
+  db.prepare(
+    'UPDATE faults SET category=?, severity=?, description=?, screenshot_taken=?, fault_codes=?, downtime_hrs=? WHERE id=?'
+  ).run(category, severity, description, screenshot_taken ? 1 : 0, fault_codes, (downtime_hrs !== undefined ? parseFloat(downtime_hrs) : fault.downtime_hrs), id);
+
+  const audit = db.prepare(`SELECT * FROM audit_trail WHERE machine_id=? AND action='FAULT_REPORTED' AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') ORDER BY id DESC LIMIT 1`).get(fault.machine_id, fault.created_at, fault.created_at);
+  if (audit) {
+    const newDetail = `[${severity}] ${category}: ${description.substring(0, 100)}`;
+    db.prepare('UPDATE audit_trail SET detail=? WHERE id=?').run(newDetail, audit.id);
+  }
+
+  if (downtime_hrs !== undefined && fault.resolved_at) {
+    const resolvedAudit = db.prepare(`
+        SELECT * FROM audit_trail 
+        WHERE machine_id = ? 
+        AND (action = 'FAULT_RESOLVED' OR action = 'BREAKDOWN_RESOLVED')
+        AND created_at >= datetime(?, '-2 seconds') 
+        AND created_at <= datetime(?, '+2 seconds')
+        ORDER BY id DESC LIMIT 1
+    `).get(fault.machine_id, fault.resolved_at, fault.resolved_at);
+
+    if (resolvedAudit) {
+        let newDetail = resolvedAudit.detail;
+        if (newDetail.includes('Downtime:')) {
+          newDetail = newDetail.replace(/Downtime: [0-9.]+h/, `Downtime: ${parseFloat(downtime_hrs || 0).toFixed(2)}h`);
+        } else {
+          newDetail += ` Downtime: ${parseFloat(downtime_hrs || 0).toFixed(2)}h`;
+        }
+        db.prepare('UPDATE audit_trail SET detail = ? WHERE id = ?').run(newDetail, resolvedAudit.id);
+    }
+  }
+  
+  const updatedFault = db.prepare('SELECT f.*, m.name as machine_name FROM faults f JOIN machines m ON f.machine_id=m.id WHERE f.id=?').get(id);
+  broadcast('fault_updated', updatedFault);
+  res.json(updatedFault);
+});
+
 // PATCH fault resolve
 app.patch('/api/faults/:id/resolve', (req, res) => {
   const { id } = req.params;
@@ -350,6 +402,50 @@ app.patch('/api/faults/:id/resolve', (req, res) => {
 
   broadcast('fault_updated', fault);
   res.json(fault);
+});
+
+// POST bulk acknowledge faults
+app.post('/api/faults/bulk-acknowledge', (req, res) => {
+  const { ids, resolved_by } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || !resolved_by) {
+    return res.status(400).json({ error: 'ids array and resolved_by required' });
+  }
+
+  const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  const updatedFaults = [];
+  let skipped_count = 0;
+
+  const tx = db.transaction(() => {
+    for (const id of ids) {
+      const fault = db.prepare('SELECT * FROM faults WHERE id = ? AND status = ?').get(id, 'open');
+      if (fault) {
+        const m = queries.getMachine.get(fault.machine_id);
+        const isBreakdown = fault.severity.includes('High') || fault.severity.includes('Critical') || (m && m.status === 'breakdown');
+        
+        // Breakdowns must be resolved via the dedicated modal, not just acknowledged.
+        if (isBreakdown) {
+          skipped_count++;
+          continue;
+        }
+
+        db.prepare(`UPDATE faults SET status='resolved', resolved_by=?, resolved_at=? WHERE id=?`).run(resolved_by, now, id);
+        queries.insertAudit.run({ machine_id: fault.machine_id, user_name: resolved_by, action: 'FAULT_RESOLVED', detail: `Fault #${id} acknowledged via bulk action.`, ip_address: req.clientIp });
+        const updatedFault = db.prepare('SELECT f.*, m.name as machine_name FROM faults f JOIN machines m ON f.machine_id=m.id WHERE f.id=?').get(id);
+        updatedFaults.push(updatedFault);
+      }
+    }
+  });
+
+  try {
+    tx();
+    updatedFaults.forEach(fault => {
+      broadcast('fault_updated', fault);
+    });
+    res.json({ success: true, acknowledged: updatedFaults.length, skipped: skipped_count });
+  } catch (e) {
+    console.error('[api] bulk-acknowledge error:', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // POST concession / restriction
@@ -444,35 +540,46 @@ app.get('/api/audit/:id/source', (req, res) => {
 // PUT edit audit AND underlying source
 app.put('/api/audit/:id/source', (req, res) => {
   const { id } = req.params;
-  const { type, source_id, user_name, detail, activity, notes, reason, category, severity, description, downtime_hrs } = req.body;
+  const { type, source_id, user_name, detail, activity, notes, reason, category, severity, description, downtime_hrs, created_at } = req.body;
   if (!user_name) return res.status(400).json({ error: 'user_name required' });
   
   const audit = db.prepare('SELECT * FROM audit_trail WHERE id=?').get(id);
   if (!audit) return res.status(404).json({ error: 'Not found' });
   
+  const newDate = created_at || audit.created_at;
+
   if (type === 'activity_log' && source_id) {
-    db.prepare('UPDATE activity_log SET user_name=?, activity=?, notes=? WHERE id=?').run(user_name, activity, notes, source_id);
-    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, `${activity}: ${notes||''}`, id);
+    db.prepare('UPDATE activity_log SET user_name=?, activity=?, notes=?, created_at=? WHERE id=?').run(user_name, activity, notes, newDate, source_id);
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=?, created_at=? WHERE id=?').run(user_name, `${activity}: ${notes||''}`, newDate, id);
   } else if (type === 'status_history' && source_id) {
-    db.prepare('UPDATE status_history SET changed_by=?, reason=? WHERE id=?').run(user_name, reason, source_id);
+    db.prepare('UPDATE status_history SET changed_by=?, reason=?, created_at=? WHERE id=?').run(user_name, reason, newDate, source_id);
     const sh = db.prepare('SELECT * FROM status_history WHERE id=?').get(source_id);
     let newDetail = detail;
-    if (audit.action === 'STATUS_CHANGE') newDetail = `${sh.old_status} → ${sh.new_status}${reason ? ': ' + reason : ''}`;
-    if (audit.action === 'POWER_CHANGE') newDetail = `Machine turned ${sh.new_power ? 'ON' : 'OFF'}${reason ? ': ' + reason : ''}`;
-    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, newDetail, id);
+    if (audit.action === 'STATUS_CHANGE') {
+      const displayStatus = { none: 'OFF', on: 'On', available: 'On', treatment: 'Clinical', qa: 'QA / Physics', service: 'Service', maintenance: 'Maintenance', breakdown: 'Breakdown', offline: 'Offline' };
+      const oN = displayStatus[sh.old_status] || sh.old_status;
+      const nN = displayStatus[sh.new_status] || sh.new_status;
+      newDetail = `${oN} → ${nN}${reason ? ': ' + reason : ''}`;
+      db.prepare(`UPDATE activity_log SET user_name=?, notes=?, created_at=? WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') AND activity='Status change'`).run(user_name, `${oN} → ${nN}${reason ? ' (' + reason + ')' : ''}`, newDate, audit.machine_id, audit.created_at, audit.created_at);
+    }
+    if (audit.action === 'POWER_CHANGE') {
+      newDetail = `Machine turned ${sh.new_power ? 'ON' : 'OFF'}${reason ? ': ' + reason : ''}`;
+      db.prepare(`UPDATE activity_log SET user_name=?, notes=?, created_at=? WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds') AND activity='Power change'`).run(user_name, `Power turned ${sh.new_power ? 'ON' : 'OFF'}${reason ? ' (' + reason + ')' : ''}`, newDate, audit.machine_id, audit.created_at, audit.created_at);
+    }
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=?, created_at=? WHERE id=?').run(user_name, newDetail, newDate, id);
   } else if (type === 'faults' && source_id) {
-    db.prepare('UPDATE faults SET user_name=?, category=?, severity=?, description=? WHERE id=?').run(user_name, category, severity, description, source_id);
-    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, `[${severity}] ${category}: ${description.substring(0, 100)}`, id);
+    db.prepare('UPDATE faults SET user_name=?, category=?, severity=?, description=?, created_at=? WHERE id=?').run(user_name, category, severity, description, newDate, source_id);
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=?, created_at=? WHERE id=?').run(user_name, `[${severity}] ${category}: ${description.substring(0, 100)}`, newDate, id);
   } else if (type === 'faults_resolve' && source_id) {
-    db.prepare('UPDATE faults SET resolved_by=?, category=?, severity=?, description=?, downtime_hrs=? WHERE id=?').run(user_name, category, severity, description, downtime_hrs || 0, source_id);
+    db.prepare('UPDATE faults SET resolved_by=?, category=?, severity=?, description=?, downtime_hrs=?, resolved_at=? WHERE id=?').run(user_name, category, severity, description, downtime_hrs || 0, newDate, source_id);
     if (audit.action === 'BREAKDOWN_RESOLVED') {
-       db.prepare(`UPDATE status_history SET changed_by=? WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(user_name, audit.machine_id, audit.created_at, audit.created_at);
-       db.prepare(`UPDATE activity_log SET user_name=? WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(user_name, audit.machine_id, audit.created_at, audit.created_at);
+       db.prepare(`UPDATE status_history SET changed_by=?, created_at=? WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(user_name, newDate, audit.machine_id, audit.created_at, audit.created_at);
+       db.prepare(`UPDATE activity_log SET user_name=?, created_at=? WHERE machine_id=? AND created_at >= datetime(?, '-2 seconds') AND created_at <= datetime(?, '+2 seconds')`).run(user_name, newDate, audit.machine_id, audit.created_at, audit.created_at);
     }
     let newDetail = audit.detail.replace(/Downtime: [0-9.]+h/, `Downtime: ${downtime_hrs || 0}h`);
-    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, newDetail, id);
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=?, created_at=? WHERE id=?').run(user_name, newDetail, newDate, id);
   } else {
-    db.prepare('UPDATE audit_trail SET user_name=?, detail=? WHERE id=?').run(user_name, detail || audit.detail, id);
+    db.prepare('UPDATE audit_trail SET user_name=?, detail=?, created_at=? WHERE id=?').run(user_name, detail || audit.detail, newDate, id);
   }
   
   broadcast('init', { machines: queries.getAllMachinesIncludingArchived.all(), activity: queries.getAllActivity.all(), faults: queries.getAllFaults.all(), concessions: queries.getActiveConcessions.all(), settings: queries.getSettings.all().reduce((acc, r) => ({...acc, [r.key]: r.value}), {}) });
@@ -596,10 +703,17 @@ app.post('/api/machines/:id/resolve-breakdown', (req, res) => {
   }
 
   if (machine.status !== newStatus || machine.power !== newPower || machine.status === 'breakdown') {
+    const displayStatus = {
+      none: 'OFF', on: 'On', available: 'On', treatment: 'Clinical',
+      qa: 'QA / Physics', service: 'Service', maintenance: 'Maintenance',
+      breakdown: 'Breakdown', offline: 'Offline'
+    };
+    const newName = displayStatus[newStatus] || newStatus;
+
     queries.insertStatusHistory.run({ machine_id: id, old_status: machine.status, new_status: newStatus, old_power: machine.power, new_power: newPower, changed_by: resolved_by, reason: `Breakdown resolved${notes ? ': ' + notes : ''}` });
     queries.updateStatus.run({ id, status: newStatus });
-    queries.insertAudit.run({ machine_id: id, user_name: resolved_by, action: 'BREAKDOWN_RESOLVED', detail: `Breakdown resolved. Status set to ${newStatus}. Downtime: ${downtime_hrs || 0}h`, ip_address: req.clientIp });
-    const actInfo = queries.insertActivity.run({ machine_id: id, user_name: resolved_by, user_role: 'System', activity: 'Breakdown resolved', notes: `Status set to ${newStatus}. Downtime: ${downtime_hrs || 0}h${notes ? ' (' + notes + ')' : ''}` });
+    queries.insertAudit.run({ machine_id: id, user_name: resolved_by, action: 'BREAKDOWN_RESOLVED', detail: `Breakdown resolved. Status set to ${newName}. Downtime: ${downtime_hrs || 0}h`, ip_address: req.clientIp });
+    const actInfo = queries.insertActivity.run({ machine_id: id, user_name: resolved_by, user_role: 'System', activity: 'Breakdown resolved', notes: `Status set to ${newName}. Downtime: ${downtime_hrs || 0}h${notes ? ' (' + notes + ')' : ''}` });
     const actEntry = db.prepare('SELECT a.*, m.name as machine_name FROM activity_log a JOIN machines m ON a.machine_id=m.id WHERE a.id=?').get(actInfo.lastInsertRowid);
     broadcast('activity_added', actEntry);
   }
@@ -822,10 +936,35 @@ app.get('/api/report', (req, res) => {
     const durationHrs = getWorkingHours(lastTime, new Date().getTime(), startStr, endStr);
     if (status_times[currentStatus] !== undefined) status_times[currentStatus] += durationHrs;
 
-    // Per user request, user-entered downtime takes precedence and should be reflected everywhere.
-    // We overwrite the system-calculated breakdown time from status_history with the sum of
-    // user-entered downtime from faults, making it the single source of truth for all reports.
-    status_times.breakdown = downtime;
+    // Calculate total exact clinical hours possible in this reporting period
+    const totalClinicalHours = getWorkingHours(since.getTime(), new Date().getTime(), startStr, endStr);
+
+    // Sum all active non-downtime states
+    const activeHours = status_times.treatment + status_times.available + status_times.on + 
+                        status_times.qa + status_times.service + status_times.maintenance;
+
+    // Any time not active and not officially documented as downtime becomes 'offline' (catch-all)
+    let calculatedOffline = totalClinicalHours - activeHours - downtime;
+    if (calculatedOffline < 0) calculatedOffline = 0; // Safeguard if user enters massive downtime
+
+    // Group into 6 core states for the utilisation percentages
+    const grouped_times = {
+      treatment: status_times.treatment,
+      available: status_times.available + status_times.on,
+      qa: status_times.qa,
+      service: status_times.service + status_times.maintenance,
+      breakdown: downtime, // Single source of truth
+      offline: calculatedOffline
+    };
+
+    // Calculate percentages based on the sum of grouped times to ensure it equals exactly 100%
+    const totalGroupedHours = Object.values(grouped_times).reduce((a, b) => a + b, 0);
+    const status_percentages = {};
+    for (const [state, hours] of Object.entries(grouped_times)) {
+      status_percentages[state] = totalGroupedHours > 0 
+        ? parseFloat(((hours / totalGroupedHours) * 100).toFixed(2)) 
+        : 0;
+    }
 
     return {
       machine: m,
@@ -833,11 +972,26 @@ app.get('/api/report', (req, res) => {
       open_faults: openFaults,
       downtime_hrs: downtime,
       activity_count: activity.filter(a => a.machine_id === m.id).length,
-      status_times
+      status_times,
+      grouped_times,
+      status_percentages,
+      total_clinical_hours: totalGroupedHours
     };
   });
 
   res.json({ period_days, period_label, since: sinceStr, summary, faults, activity, yearly_faults });
+});
+
+// GET release notes
+app.get('/api/release-notes', (_req, res) => {
+  const notesPath = path.join(__dirname, 'release_notes.txt');
+  fs.readFile(notesPath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading release_notes.txt:', err);
+      return res.status(500).send('Could not read release notes.');
+    }
+    res.type('text/plain').send(data);
+  });
 });
 
 // Catch-all — serve frontend

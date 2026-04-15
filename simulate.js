@@ -20,6 +20,7 @@ const FAULT_DESCRIPTIONS = [
     'Software crashed during plan loading.',
     'KV source is failing to warm up correctly.'
 ];
+const FAULT_CODES = ['E101', 'E202', 'W300', 'F404', 'INT01', 'MOT02', 'RAD03', 'SYS05', 'COM09'];
 
 // --- CUSTOM QUERIES FOR TIME TRAVEL ---
 const simQueries = {
@@ -28,7 +29,7 @@ const simQueries = {
     updateStatus: db.prepare(`UPDATE machines SET status = @status, updated_at = @updated_at WHERE id = @id`),
     insertAudit: db.prepare(`INSERT INTO audit_trail (machine_id, user_name, action, detail, ip_address, created_at) VALUES (@machine_id, @user_name, @action, @detail, @ip_address, @created_at)`),
     insertActivity: db.prepare(`INSERT INTO activity_log (machine_id, user_name, user_role, activity, notes, created_at) VALUES (@machine_id, @user_name, @user_role, @activity, @notes, @created_at)`),
-    insertFault: db.prepare(`INSERT INTO faults (machine_id, user_name, user_role, category, severity, description, created_at) VALUES (@machine_id, @user_name, @user_role, @category, @severity, @description, @created_at)`),
+    insertFault: db.prepare(`INSERT INTO faults (machine_id, user_name, user_role, category, severity, description, screenshot_taken, fault_codes, created_at) VALUES (@machine_id, @user_name, @user_role, @category, @severity, @description, @screenshot_taken, @fault_codes, @created_at)`),
     resolveFault: db.prepare(`UPDATE faults SET status='resolved', resolved_by=@resolved_by, resolved_at=@resolved_at, downtime_hrs=@downtime_hrs WHERE id=@id`)
 };
 
@@ -154,8 +155,16 @@ function changeStatus(machine, user, sqlTime) {
 
 function reportFault(machine, user, role, sqlTime) {
     const severity = randomItem(['Low', 'Medium']);
+    const hasScreenshot = Math.random() < 0.3 ? 1 : 0;
+    let faultCodes = null;
+    if (Math.random() < 0.4) {
+        const numCodes = Math.floor(Math.random() * 3) + 1;
+        const codes = [];
+        for (let i = 0; i < numCodes; i++) codes.push(randomItem(FAULT_CODES));
+        faultCodes = JSON.stringify([...new Set(codes)]);
+    }
 
-    simQueries.insertFault.run({ machine_id: machine.id, user_name: user, user_role: role, category: randomItem(FAULT_CATEGORIES), severity: severity, description: randomItem(FAULT_DESCRIPTIONS), created_at: sqlTime });
+    simQueries.insertFault.run({ machine_id: machine.id, user_name: user, user_role: role, category: randomItem(FAULT_CATEGORIES), severity: severity, description: randomItem(FAULT_DESCRIPTIONS), screenshot_taken: hasScreenshot, fault_codes: faultCodes, created_at: sqlTime });
     simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'FAULT_REPORTED', detail: `Simulated: [${severity}] fault`, ip_address: '127.0.0.1', created_at: sqlTime });
     simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: role, activity: 'Fault reported', notes: `[${severity}] fault (simulated)`, created_at: sqlTime });
 }
@@ -164,7 +173,15 @@ function reportBreakdown(machine, user, role, sqlTime) {
     if (machine.status === 'breakdown') return;
 
     const newStatus = 'breakdown';
-    simQueries.insertFault.run({ machine_id: machine.id, user_name: user, user_role: role, category: randomItem(FAULT_CATEGORIES), severity: 'High', description: randomItem(FAULT_DESCRIPTIONS), created_at: sqlTime });
+    const hasScreenshot = Math.random() < 0.5 ? 1 : 0;
+    let faultCodes = null;
+    if (Math.random() < 0.6) {
+        const numCodes = Math.floor(Math.random() * 3) + 1;
+        const codes = [];
+        for (let i = 0; i < numCodes; i++) codes.push(randomItem(FAULT_CODES));
+        faultCodes = JSON.stringify([...new Set(codes)]);
+    }
+    simQueries.insertFault.run({ machine_id: machine.id, user_name: user, user_role: role, category: randomItem(FAULT_CATEGORIES), severity: 'High', description: randomItem(FAULT_DESCRIPTIONS), screenshot_taken: hasScreenshot, fault_codes: faultCodes, created_at: sqlTime });
     simQueries.insertStatusHistory.run({ machine_id: machine.id, old_status: machine.status, new_status: newStatus, old_power: machine.power, new_power: machine.power, changed_by: user, reason: 'Simulated breakdown reported', created_at: sqlTime });
     simQueries.updateStatus.run({ id: machine.id, status: newStatus, updated_at: sqlTime });
     simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'FAULT_REPORTED', detail: `Simulated: [High] Breakdown`, ip_address: '127.0.0.1', created_at: sqlTime });
