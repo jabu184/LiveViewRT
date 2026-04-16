@@ -881,7 +881,12 @@ function connectWS(){
 }
 function handleWS(msg){
   if(msg.type==='init'){
-    state=msg.payload;
+    if (!msg.payload || !Array.isArray(msg.payload.machines) || !msg.payload.settings) {
+      console.warn('Incomplete init payload received, ignoring update.', msg.payload);
+      // On first load, this might mean a blank screen, but for reconnects, it's better to keep stale data than wipe the screen.
+      return;
+    }
+    state = msg.payload;
     buildAll();
     const defMach = localStorage.getItem('defaultMachine');
     if (defMach && state.machines.find(m => m.id === defMach && !m.archived)) {
@@ -1024,8 +1029,10 @@ function buildDropdowns() {
 function populateSettings(){
   let s = state.settings?.clinical_start || '07:00';
   if (!s.includes(':')) s = s.padStart(2, '0') + ':00';
+  else s = s.split(':').map(p => p.padStart(2, '0')).join(':');
   let e = state.settings?.clinical_end || '20:00';
   if (!e.includes(':')) e = e.padStart(2, '0') + ':00';
+  else e = e.split(':').map(p => p.padStart(2, '0')).join(':');
   if(document.getElementById('cfgStart')) document.getElementById('cfgStart').value = s;
   if(document.getElementById('cfgEnd')) document.getElementById('cfgEnd').value = e;
   if(document.getElementById('rbDescText')) document.getElementById('rbDescText').innerHTML = `Mark the breakdown as resolved. The accumulated downtime (Mon-Fri, ${s}-${e}) is calculated below, but can be overridden if required.`;
@@ -1249,7 +1256,7 @@ function refreshMachinePage(machineId){
       </div></div>
     </div>`;
   
-  const newActiveBtn = document.querySelector(`#page-${machineId} .tabs .tab[onclick*="'${activeTabId}'"]`);
+  const newActiveBtn = el.querySelector(`.tabs .tab[onclick*="'${activeTabId}'"]`);
   if (newActiveBtn) {
     el.querySelector('.tabs .tab.active')?.classList.remove('active');
     el.querySelector('.tab-pane.active')?.classList.remove('active');
@@ -1332,8 +1339,8 @@ function switchAdminTab(btn,tabId){
 }
 function switchMTab(btn,tabId){
   btn.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
-  const machineId=tabId.split('-').pop();
-  document.querySelectorAll(`[id^="mt-"][id$="-${machineId}"]`).forEach(p=>p.classList.remove('active'));
+  const machineId = tabId.substring(tabId.indexOf('-', 3) + 1);
+  document.querySelectorAll(`[id^="mt-"][id$='-${machineId}']`).forEach(p=>p.classList.remove('active'));
   document.getElementById(tabId)?.classList.add('active');
 }
 
@@ -2295,8 +2302,14 @@ async function loadAdminData(){
   adminReport.yearly_faults = (adminReport.yearly_faults||[]).filter(f => activeMachineIds.has(f.machine_id));
 
   const{summary,faults,activity,yearly_faults}=adminReport;
+
+  let sStr=state.settings?.clinical_start||'07:00';if(!sStr.includes(':'))sStr+=':00';
+  let eStr=state.settings?.clinical_end||'20:00';if(!eStr.includes(':'))eStr+=':00';
+  let [sH,sM]=sStr.split(':').map(Number);let [eH,eM]=eStr.split(':').map(Number);
+  let dailyHrs=Math.max(0, (eH+eM/60) - (sH+sM/60)) || 13;
+
   summary.forEach(s => {
-    s.long_faults = faults.filter(f => f.machine_id === s.machine.id && f.downtime_hrs > 2).length;
+    s.long_faults = faults.filter(f => f.machine_id === s.machine.id && f.downtime_hrs > 2).reduce((sum, f) => sum + Math.ceil(f.downtime_hrs / dailyHrs), 0);
     s.breakdown_count = faults.filter(f => f.machine_id === s.machine.id && (f.severity.includes('High') || f.severity.includes('Critical'))).length;
   });
   const totalDt=summary.reduce((s,m)=>s+m.downtime_hrs,0),totalFaults=summary.reduce((s,m)=>s+m.fault_count,0),openFaults=summary.reduce((s,m)=>s+m.open_faults,0);
@@ -2337,7 +2350,7 @@ async function loadAdminData(){
       if (f.downtime_hrs !== null && f.downtime_hrs !== undefined) {
         faultsByMonth[mKey].totalDt += f.downtime_hrs;
         faultsByMonth[mKey].machines[f.machine_id].dt += f.downtime_hrs;
-        if (f.downtime_hrs > 2) faultsByMonth[mKey].long += 1;
+        if (f.downtime_hrs > 2) faultsByMonth[mKey].long += Math.ceil(f.downtime_hrs / dailyHrs);
       }
     }
   });
@@ -2390,7 +2403,7 @@ async function loadAdminData(){
   barLegendHtml += `</div>`;
   let monthlyBarChartHtml = `<div class="card" style="flex:2;min-width:450px"><div class="card-head" style="margin-bottom:12px">Monthly Downtime Summary (Last 12 Months)</div><div class="card-body" style="padding-top:0">${svgBar}${barLegendHtml}</div></div>`;
   
-  let monthlyTableHtml = `<div class="card" style="flex:1;min-width:250px;padding:0;overflow:hidden;display:flex;flex-direction:column"><div class="card-head" style="padding-bottom:10px;border-bottom:1px solid var(--border)">Breakdowns by Month</div><div style="overflow-y:auto;max-height:280px"><table class="tbl"><thead><tr><th>Month</th><th>Downtime</th><th>&gt;2h</th></tr></thead><tbody>${[...last12Months].reverse().map(mKey => {
+  let monthlyTableHtml = `<div class="card" style="flex:1;min-width:250px;padding:0;overflow:hidden;display:flex;flex-direction:column"><div class="card-head" style="padding-bottom:10px;border-bottom:1px solid var(--border)">Breakdowns by Month</div><div style="overflow-y:auto;max-height:280px"><table class="tbl"><thead><tr><th>Month</th><th>Downtime</th><th>Days &gt;2h</th></tr></thead><tbody>${[...last12Months].reverse().map(mKey => {
     const data = faultsByMonth[mKey];
     let hrs = Math.floor(data.totalDt), mins = Math.round((data.totalDt - hrs) * 60);
     if (mins === 60) { hrs += 1; mins = 0; }
@@ -2401,7 +2414,7 @@ async function loadAdminData(){
 
   adminReport.last12Months = sortedMonths;
   adminReport.faultsByMonth = faultsByMonth;
-  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('model')" title="Sort">Model &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">&gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
+  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('model')" title="Sort">Model &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">Days &gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
   renderInteractiveGraphs();
   renderCategoryCharts();
   renderDtTable();
