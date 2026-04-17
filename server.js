@@ -812,6 +812,38 @@ app.post('/api/restore', (req, res) => {
   }
 });
 
+// POST update frontend
+app.post('/api/update-frontend', (req, res) => {
+  const adminPwd = req.query.admin_pwd;
+  const settings = queries.getSettings.all().reduce((acc, r) => ({...acc, [r.key]: r.value}), {});
+
+  // Password is required for this action. Default is 'admin'.
+  if ((settings.admin_pwd || 'admin') !== adminPwd) {
+    return res.status(401).json({ error: 'Incorrect admin password' });
+  }
+
+  if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+    return res.status(400).json({ error: 'Invalid or empty file payload' });
+  }
+
+  try {
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    const backupPath = path.join(__dirname, 'public', 'index.html.bak');
+    if (fs.existsSync(indexPath)) {
+      fs.copyFileSync(indexPath, backupPath);
+    }
+    fs.writeFileSync(indexPath, req.body);
+    queries.insertAudit.run({
+      machine_id: null, user_name: 'Admin', action: 'SYSTEM_UPDATE',
+      detail: 'Frontend HTML interface was updated remotely.', ip_address: req.clientIp
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Failed to write index.html:', err);
+    res.status(500).json({ error: 'Failed to write file to disk' });
+  }
+});
+
 // PATCH settings
 app.patch('/api/settings', (req, res) => {
   const { clinical_start, clinical_end, fault_categories, fault_severities, activity_categories, admin_pwd_enabled, admin_pwd, default_fault_category, default_fault_severity, default_activity_category } = req.body;

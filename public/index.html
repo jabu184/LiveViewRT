@@ -360,6 +360,20 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
             </div>
           </div>
         </div>
+
+        <div class="card" style="max-width:500px;margin-bottom:16px">
+          <div class="card-head">System Update</div>
+          <div class="card-body">
+            <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Update the dashboard interface by uploading a new index.html file.</p>
+            <div style="border-top:1px solid var(--border);padding-top:12px">
+              <label class="btn btn-danger" style="display:inline-block;cursor:pointer">
+                Upload New index.html...
+                <input type="file" id="updateHtmlFile" accept=".html" style="display:none" onchange="updateFrontend(this)">
+              </label>
+              <p style="font-size:11px;color:var(--text3);margin-top:6px">Warning: This will overwrite the current interface immediately. The page will reload after upload.</p>
+            </div>
+          </div>
+        </div>
         
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;max-width:1200px">
           <div class="card" style="flex:1;min-width:300px">
@@ -696,6 +710,20 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="cancelRestore()">Cancel</button>
       <button class="btn btn-danger" onclick="confirmRestore()">Restore & Restart</button>
+    </div>
+  </div>
+</div>
+
+<!-- UPDATE MODAL -->
+<div class="modal-overlay" id="updateModal">
+  <div class="modal" style="max-width:450px; border:2px solid var(--red)">
+    <div class="modal-head"><h2 style="color:var(--red)">&#9888; Critical System Update</h2><button class="modal-close" onclick="cancelUpdate()">&#10005;</button></div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">You are about to overwrite the core dashboard interface with <span id="updateFileName" style="font-family:var(--mono);color:var(--blue)"></span>.</p>
+    <div class="alert alert-red" style="margin-bottom:16px; font-size:12px; line-height:1.45"><strong>WARNING:</strong> Uploading a broken or corrupted HTML file will permanently break the application and require manual server recovery. Proceed with extreme caution.</div>
+    <div class="form-group" id="updatePwdGroup"><label>Admin Password <span style="color:var(--red)">*</span></label><input type="password" id="updatePwd" placeholder="Admin password required to update"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      <button class="btn" onclick="cancelUpdate()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmUpdate()">I understand, Update & Reload</button>
     </div>
   </div>
 </div>
@@ -1820,6 +1848,38 @@ async function confirmRestore() {
   } catch (e) { toast('Network error during restore', 'error'); }
 }
 
+let pendingUpdateFile = null;
+function updateFrontend(input) {
+  const file = input.files[0];
+  input.value = '';
+  if (!file) return;
+  pendingUpdateFile = file;
+  document.getElementById('updateFileName').textContent = `"${file.name}"`;
+  document.getElementById('updatePwd').value = '';
+  openModal('updateModal');
+  setTimeout(() => document.getElementById('updatePwd').focus(), 100);
+}
+function cancelUpdate() {
+  pendingUpdateFile = null;
+  closeModal('updateModal');
+}
+async function confirmUpdate() {
+  const pwd = document.getElementById('updatePwd').value;
+  if (!pwd) {
+    toast('Admin password is required to perform this action.', 'error');
+    return;
+  }
+  const file = pendingUpdateFile;
+  closeModal('updateModal');
+  toast('Uploading interface update... please wait.', 'info');
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const res = await fetch(`/api/update-frontend?admin_pwd=${encodeURIComponent(pwd)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: arrayBuffer });
+    const data = await res.json();
+    if (res.ok && data.success) { toast('Update successful. Reloading interface...', 'success'); setTimeout(() => window.location.reload(true), 2000); } else toast(data.error || 'Update failed', 'error');
+  } catch (e) { toast('Network error during update', 'error'); }
+}
+
 let pendingBreakdown=null;
 async function requestBreakdownResolve(machineId, faultId = null){
   pendingBreakdown=machineId;breakdownStartTime=null;
@@ -2701,7 +2761,7 @@ async function api(method,path,body){
 
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
-document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m){cancelPower();cancelRestore();m.classList.remove('open')}})});
+document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m){cancelPower();cancelRestore();if(typeof cancelUpdate==='function')cancelUpdate();m.classList.remove('open')}})});
 
 function openAboutModal() {
   openModal('aboutModal');
@@ -2798,6 +2858,7 @@ document.addEventListener('keydown', e => {
       else if (openM.id === 'stationModal') saveDefaultStation();
       else if (openM.id === 'restoreModal') confirmRestore();
       else if (openM.id === 'aboutModal') closeModal('aboutModal');
+      else if (openM.id === 'updateModal' && document.getElementById('updatePwd').value) confirmUpdate();
     }
   }
 });
