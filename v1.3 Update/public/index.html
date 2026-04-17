@@ -360,20 +360,6 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
             </div>
           </div>
         </div>
-
-        <div class="card" style="max-width:500px;margin-bottom:16px">
-          <div class="card-head">System Update</div>
-          <div class="card-body">
-            <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Update the dashboard interface by uploading a new index.html file.</p>
-            <div style="border-top:1px solid var(--border);padding-top:12px">
-              <label class="btn btn-danger" style="display:inline-block;cursor:pointer">
-                Upload New index.html...
-                <input type="file" id="updateHtmlFile" accept=".html" style="display:none" onchange="updateFrontend(this)">
-              </label>
-              <p style="font-size:11px;color:var(--text3);margin-top:6px">Warning: This will overwrite the current interface immediately. The page will reload after upload.</p>
-            </div>
-          </div>
-        </div>
         
         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;max-width:1200px">
           <div class="card" style="flex:1;min-width:300px">
@@ -714,27 +700,13 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
   </div>
 </div>
 
-<!-- UPDATE MODAL -->
-<div class="modal-overlay" id="updateModal">
-  <div class="modal" style="max-width:450px; border:2px solid var(--red)">
-    <div class="modal-head"><h2 style="color:var(--red)">&#9888; Critical System Update</h2><button class="modal-close" onclick="cancelUpdate()">&#10005;</button></div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">You are about to overwrite the core dashboard interface with <span id="updateFileName" style="font-family:var(--mono);color:var(--blue)"></span>.</p>
-    <div class="alert alert-red" style="margin-bottom:16px; font-size:12px; line-height:1.45"><strong>WARNING:</strong> Uploading a broken or corrupted HTML file will permanently break the application and require manual server recovery. Proceed with extreme caution.</div>
-    <div class="form-group" id="updatePwdGroup"><label>Admin Password <span style="color:var(--red)">*</span></label><input type="password" id="updatePwd" placeholder="Admin password required to update"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
-      <button class="btn" onclick="cancelUpdate()">Cancel</button>
-      <button class="btn btn-danger" onclick="confirmUpdate()">I understand, Update & Reload</button>
-    </div>
-  </div>
-</div>
-
 <!-- ABOUT MODAL -->
 <div class="modal-overlay" id="aboutModal">
   <div class="modal" style="max-width:420px">
     <div class="modal-head" style="justify-content:flex-end;margin-bottom:10px"><button class="modal-close" onclick="closeModal('aboutModal')">&#10005;</button></div>
     <div style="text-align:center;padding:0 0 20px">
       <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:300px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.32</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.3</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:20px">April 2026</p>
 
@@ -909,12 +881,7 @@ function connectWS(){
 }
 function handleWS(msg){
   if(msg.type==='init'){
-    if (!msg.payload || !Array.isArray(msg.payload.machines) || !msg.payload.settings) {
-      console.warn('Incomplete init payload received, ignoring update.', msg.payload);
-      // On first load, this might mean a blank screen, but for reconnects, it's better to keep stale data than wipe the screen.
-      return;
-    }
-    state = msg.payload;
+    state=msg.payload;
     buildAll();
     const defMach = localStorage.getItem('defaultMachine');
     if (defMach && state.machines.find(m => m.id === defMach && !m.archived)) {
@@ -1057,10 +1024,8 @@ function buildDropdowns() {
 function populateSettings(){
   let s = state.settings?.clinical_start || '07:00';
   if (!s.includes(':')) s = s.padStart(2, '0') + ':00';
-  else s = s.split(':').map(p => p.padStart(2, '0')).join(':');
   let e = state.settings?.clinical_end || '20:00';
   if (!e.includes(':')) e = e.padStart(2, '0') + ':00';
-  else e = e.split(':').map(p => p.padStart(2, '0')).join(':');
   if(document.getElementById('cfgStart')) document.getElementById('cfgStart').value = s;
   if(document.getElementById('cfgEnd')) document.getElementById('cfgEnd').value = e;
   if(document.getElementById('rbDescText')) document.getElementById('rbDescText').innerHTML = `Mark the breakdown as resolved. The accumulated downtime (Mon-Fri, ${s}-${e}) is calculated below, but can be overridden if required.`;
@@ -1284,7 +1249,7 @@ function refreshMachinePage(machineId){
       </div></div>
     </div>`;
   
-  const newActiveBtn = el.querySelector(`.tabs .tab[onclick*="'${activeTabId}'"]`);
+  const newActiveBtn = document.querySelector(`#page-${machineId} .tabs .tab[onclick*="'${activeTabId}'"]`);
   if (newActiveBtn) {
     el.querySelector('.tabs .tab.active')?.classList.remove('active');
     el.querySelector('.tab-pane.active')?.classList.remove('active');
@@ -1367,8 +1332,8 @@ function switchAdminTab(btn,tabId){
 }
 function switchMTab(btn,tabId){
   btn.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
-  const machineId = tabId.substring(tabId.indexOf('-', 3) + 1);
-  document.querySelectorAll(`[id^="mt-"][id$='-${machineId}']`).forEach(p=>p.classList.remove('active'));
+  const machineId=tabId.split('-').pop();
+  document.querySelectorAll(`[id^="mt-"][id$="-${machineId}"]`).forEach(p=>p.classList.remove('active'));
   document.getElementById(tabId)?.classList.add('active');
 }
 
@@ -1846,38 +1811,6 @@ async function confirmRestore() {
     const data = await res.json();
     if (res.ok && data.success) { toast('Restore successful. Server is restarting...', 'success'); setTimeout(() => window.location.reload(), 3000); } else toast(data.error || 'Restore failed', 'error');
   } catch (e) { toast('Network error during restore', 'error'); }
-}
-
-let pendingUpdateFile = null;
-function updateFrontend(input) {
-  const file = input.files[0];
-  input.value = '';
-  if (!file) return;
-  pendingUpdateFile = file;
-  document.getElementById('updateFileName').textContent = `"${file.name}"`;
-  document.getElementById('updatePwd').value = '';
-  openModal('updateModal');
-  setTimeout(() => document.getElementById('updatePwd').focus(), 100);
-}
-function cancelUpdate() {
-  pendingUpdateFile = null;
-  closeModal('updateModal');
-}
-async function confirmUpdate() {
-  const pwd = document.getElementById('updatePwd').value;
-  if (!pwd) {
-    toast('Admin password is required to perform this action.', 'error');
-    return;
-  }
-  const file = pendingUpdateFile;
-  closeModal('updateModal');
-  toast('Uploading interface update... please wait.', 'info');
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const res = await fetch(`/api/update-frontend?admin_pwd=${encodeURIComponent(pwd)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: arrayBuffer });
-    const data = await res.json();
-    if (res.ok && data.success) { toast('Update successful. Reloading interface...', 'success'); setTimeout(() => window.location.reload(true), 2000); } else toast(data.error || 'Update failed', 'error');
-  } catch (e) { toast('Network error during update', 'error'); }
 }
 
 let pendingBreakdown=null;
@@ -2362,46 +2295,8 @@ async function loadAdminData(){
   adminReport.yearly_faults = (adminReport.yearly_faults||[]).filter(f => activeMachineIds.has(f.machine_id));
 
   const{summary,faults,activity,yearly_faults}=adminReport;
-
-  let sStr=state.settings?.clinical_start||'07:00';if(!sStr.includes(':'))sStr+=':00';
-  let eStr=state.settings?.clinical_end||'20:00';if(!eStr.includes(':'))eStr+=':00';
-  let [sH,sM]=sStr.split(':').map(Number);let [eH,eM]=eStr.split(':').map(Number);
-
-  const calcDaysOver2h = (f) => {
-    if (!f.created_at) return 0;
-    const isClosed = f.status !== 'open';
-    const hasDowntime = f.downtime_hrs !== null && f.downtime_hrs !== undefined && f.downtime_hrs !== '';
-    const dtHrs = hasDowntime ? Number(f.downtime_hrs) : 0;
-    
-    if (isClosed && hasDowntime && dtHrs <= 2) return 0;
-
-    let start = new Date(f.created_at.includes('T') || f.created_at.includes('Z') ? f.created_at : f.created_at.replace(' ', 'T') + 'Z');
-    let end = f.resolved_at ? new Date(f.resolved_at.includes('T') || f.resolved_at.includes('Z') ? f.resolved_at : f.resolved_at.replace(' ', 'T') + 'Z') : new Date();
-    let current = new Date(start);
-    current.setHours(0, 0, 0, 0);
-    let count = 0;
-    while (current < end) {
-      let day = current.getDay();
-      if (day !== 0 && day !== 6) {
-        let dayStart = new Date(current); dayStart.setHours(sH, sM, 0, 0);
-        let dayEnd = new Date(current); dayEnd.setHours(eH, eM, 0, 0);
-        let actualStart = start > dayStart ? start : dayStart;
-        let actualEnd = end < dayEnd ? end : dayEnd;
-        if (actualStart < actualEnd && (actualEnd - actualStart) / 3600000 > 2) count++;
-      }
-      current.setDate(current.getDate() + 1);
-      current.setHours(0, 0, 0, 0);
-    }
-    
-    if (isClosed && hasDowntime) {
-      count = Math.min(count, Math.floor(dtHrs / 2));
-    }
-    
-    return count === 0 && isClosed && dtHrs > 2 ? 1 : count;
-  };
-
   summary.forEach(s => {
-    s.long_faults = faults.filter(f => f.machine_id === s.machine.id && ((f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) || f.downtime_hrs > 0)).reduce((sum, f) => sum + calcDaysOver2h(f), 0);
+    s.long_faults = faults.filter(f => f.machine_id === s.machine.id && f.downtime_hrs > 2).length;
     s.breakdown_count = faults.filter(f => f.machine_id === s.machine.id && (f.severity.includes('High') || f.severity.includes('Critical'))).length;
   });
   const totalDt=summary.reduce((s,m)=>s+m.downtime_hrs,0),totalFaults=summary.reduce((s,m)=>s+m.fault_count,0),openFaults=summary.reduce((s,m)=>s+m.open_faults,0);
@@ -2442,9 +2337,7 @@ async function loadAdminData(){
       if (f.downtime_hrs !== null && f.downtime_hrs !== undefined) {
         faultsByMonth[mKey].totalDt += f.downtime_hrs;
         faultsByMonth[mKey].machines[f.machine_id].dt += f.downtime_hrs;
-      }
-      if ((f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) || f.downtime_hrs > 0) {
-        faultsByMonth[mKey].long += calcDaysOver2h(f);
+        if (f.downtime_hrs > 2) faultsByMonth[mKey].long += 1;
       }
     }
   });
@@ -2497,7 +2390,7 @@ async function loadAdminData(){
   barLegendHtml += `</div>`;
   let monthlyBarChartHtml = `<div class="card" style="flex:2;min-width:450px"><div class="card-head" style="margin-bottom:12px">Monthly Downtime Summary (Last 12 Months)</div><div class="card-body" style="padding-top:0">${svgBar}${barLegendHtml}</div></div>`;
   
-  let monthlyTableHtml = `<div class="card" style="flex:1;min-width:250px;padding:0;overflow:hidden;display:flex;flex-direction:column"><div class="card-head" style="padding-bottom:10px;border-bottom:1px solid var(--border)">Breakdowns by Month</div><div style="overflow-y:auto;max-height:280px"><table class="tbl"><thead><tr><th>Month</th><th>Downtime</th><th>Days &gt;2h</th></tr></thead><tbody>${[...last12Months].reverse().map(mKey => {
+  let monthlyTableHtml = `<div class="card" style="flex:1;min-width:250px;padding:0;overflow:hidden;display:flex;flex-direction:column"><div class="card-head" style="padding-bottom:10px;border-bottom:1px solid var(--border)">Breakdowns by Month</div><div style="overflow-y:auto;max-height:280px"><table class="tbl"><thead><tr><th>Month</th><th>Downtime</th><th>&gt;2h</th></tr></thead><tbody>${[...last12Months].reverse().map(mKey => {
     const data = faultsByMonth[mKey];
     let hrs = Math.floor(data.totalDt), mins = Math.round((data.totalDt - hrs) * 60);
     if (mins === 60) { hrs += 1; mins = 0; }
@@ -2508,7 +2401,7 @@ async function loadAdminData(){
 
   adminReport.last12Months = sortedMonths;
   adminReport.faultsByMonth = faultsByMonth;
-  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('model')" title="Sort">Model &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">Days &gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
+  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('model')" title="Sort">Model &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">&gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
   renderInteractiveGraphs();
   renderCategoryCharts();
   renderDtTable();
@@ -2773,7 +2666,7 @@ async function api(method,path,body){
 
 function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
-document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m){cancelPower();cancelRestore();if(typeof cancelUpdate==='function')cancelUpdate();m.classList.remove('open')}})});
+document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m){cancelPower();cancelRestore();m.classList.remove('open')}})});
 
 function openAboutModal() {
   openModal('aboutModal');
@@ -2870,7 +2763,6 @@ document.addEventListener('keydown', e => {
       else if (openM.id === 'stationModal') saveDefaultStation();
       else if (openM.id === 'restoreModal') confirmRestore();
       else if (openM.id === 'aboutModal') closeModal('aboutModal');
-      else if (openM.id === 'updateModal' && document.getElementById('updatePwd').value) confirmUpdate();
     }
   }
 });

@@ -734,7 +734,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="modal-head" style="justify-content:flex-end;margin-bottom:10px"><button class="modal-close" onclick="closeModal('aboutModal')">&#10005;</button></div>
     <div style="text-align:center;padding:0 0 20px">
       <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:300px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.32</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.3</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:20px">April 2026</p>
 
@@ -2369,12 +2369,7 @@ async function loadAdminData(){
 
   const calcDaysOver2h = (f) => {
     if (!f.created_at) return 0;
-    const isClosed = f.status !== 'open';
-    const hasDowntime = f.downtime_hrs !== null && f.downtime_hrs !== undefined && f.downtime_hrs !== '';
-    const dtHrs = hasDowntime ? Number(f.downtime_hrs) : 0;
-    
-    if (isClosed && hasDowntime && dtHrs <= 2) return 0;
-
+    if (f.downtime_hrs !== null && f.downtime_hrs !== undefined && f.downtime_hrs <= 2 && f.status === 'resolved') return 0;
     let start = new Date(f.created_at.includes('T') || f.created_at.includes('Z') ? f.created_at : f.created_at.replace(' ', 'T') + 'Z');
     let end = f.resolved_at ? new Date(f.resolved_at.includes('T') || f.resolved_at.includes('Z') ? f.resolved_at : f.resolved_at.replace(' ', 'T') + 'Z') : new Date();
     let current = new Date(start);
@@ -2392,16 +2387,11 @@ async function loadAdminData(){
       current.setDate(current.getDate() + 1);
       current.setHours(0, 0, 0, 0);
     }
-    
-    if (isClosed && hasDowntime) {
-      count = Math.min(count, Math.floor(dtHrs / 2));
-    }
-    
-    return count === 0 && isClosed && dtHrs > 2 ? 1 : count;
+    return count === 0 && f.downtime_hrs > 2 ? 1 : count;
   };
 
   summary.forEach(s => {
-    s.long_faults = faults.filter(f => f.machine_id === s.machine.id && ((f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) || f.downtime_hrs > 0)).reduce((sum, f) => sum + calcDaysOver2h(f), 0);
+    s.long_faults = faults.filter(f => f.machine_id === s.machine.id).reduce((sum, f) => sum + calcDaysOver2h(f), 0);
     s.breakdown_count = faults.filter(f => f.machine_id === s.machine.id && (f.severity.includes('High') || f.severity.includes('Critical'))).length;
   });
   const totalDt=summary.reduce((s,m)=>s+m.downtime_hrs,0),totalFaults=summary.reduce((s,m)=>s+m.fault_count,0),openFaults=summary.reduce((s,m)=>s+m.open_faults,0);
@@ -2443,9 +2433,7 @@ async function loadAdminData(){
         faultsByMonth[mKey].totalDt += f.downtime_hrs;
         faultsByMonth[mKey].machines[f.machine_id].dt += f.downtime_hrs;
       }
-      if ((f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) || f.downtime_hrs > 0) {
-        faultsByMonth[mKey].long += calcDaysOver2h(f);
-      }
+      faultsByMonth[mKey].long += calcDaysOver2h(f);
     }
   });
   const sortedMonths = last12Months;

@@ -1,0 +1,15 @@
+v1.3
+-Fix - Utilisation data includes offline time and calculate within core clinical hours only
+-Fix - Utilisation charts correctly display clinical utilisation percentages
+-Updated -  Status label from available to clinical
+-Updated -  Multiple machines can now be toggled on/off under category analysis
+-Added - Edit downtime for breakdown events
+-Added - Select and acknowledge multiple faults simultaneously
+-Added - Edit time stamps for individual events via the audit log
+-Added - Edit faults/breakdowns direct from equipment page
+-Added - Fault codes: Add/edit fault codes, summary view and search via admin
+-Added - Flag faults/breakdowns with screenshots
+-Added - Release notes available via About page
+
+
+
