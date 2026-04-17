@@ -2306,10 +2306,32 @@ async function loadAdminData(){
   let sStr=state.settings?.clinical_start||'07:00';if(!sStr.includes(':'))sStr+=':00';
   let eStr=state.settings?.clinical_end||'20:00';if(!eStr.includes(':'))eStr+=':00';
   let [sH,sM]=sStr.split(':').map(Number);let [eH,eM]=eStr.split(':').map(Number);
-  let dailyHrs=Math.max(0, (eH+eM/60) - (sH+sM/60)) || 13;
+
+  const calcDaysOver2h = (f) => {
+    if (!f.created_at) return 0;
+    if (f.downtime_hrs !== null && f.downtime_hrs !== undefined && f.downtime_hrs <= 2 && f.status === 'resolved') return 0;
+    let start = new Date(f.created_at.includes('T') || f.created_at.includes('Z') ? f.created_at : f.created_at.replace(' ', 'T') + 'Z');
+    let end = f.resolved_at ? new Date(f.resolved_at.includes('T') || f.resolved_at.includes('Z') ? f.resolved_at : f.resolved_at.replace(' ', 'T') + 'Z') : new Date();
+    let current = new Date(start);
+    current.setHours(0, 0, 0, 0);
+    let count = 0;
+    while (current < end) {
+      let day = current.getDay();
+      if (day !== 0 && day !== 6) {
+        let dayStart = new Date(current); dayStart.setHours(sH, sM, 0, 0);
+        let dayEnd = new Date(current); dayEnd.setHours(eH, eM, 0, 0);
+        let actualStart = start > dayStart ? start : dayStart;
+        let actualEnd = end < dayEnd ? end : dayEnd;
+        if (actualStart < actualEnd && (actualEnd - actualStart) / 3600000 > 2) count++;
+      }
+      current.setDate(current.getDate() + 1);
+      current.setHours(0, 0, 0, 0);
+    }
+    return count === 0 && f.downtime_hrs > 2 ? 1 : count;
+  };
 
   summary.forEach(s => {
-    s.long_faults = faults.filter(f => f.machine_id === s.machine.id && f.downtime_hrs > 2).reduce((sum, f) => sum + Math.ceil(f.downtime_hrs / dailyHrs), 0);
+    s.long_faults = faults.filter(f => f.machine_id === s.machine.id).reduce((sum, f) => sum + calcDaysOver2h(f), 0);
     s.breakdown_count = faults.filter(f => f.machine_id === s.machine.id && (f.severity.includes('High') || f.severity.includes('Critical'))).length;
   });
   const totalDt=summary.reduce((s,m)=>s+m.downtime_hrs,0),totalFaults=summary.reduce((s,m)=>s+m.fault_count,0),openFaults=summary.reduce((s,m)=>s+m.open_faults,0);
@@ -2350,8 +2372,8 @@ async function loadAdminData(){
       if (f.downtime_hrs !== null && f.downtime_hrs !== undefined) {
         faultsByMonth[mKey].totalDt += f.downtime_hrs;
         faultsByMonth[mKey].machines[f.machine_id].dt += f.downtime_hrs;
-        if (f.downtime_hrs > 2) faultsByMonth[mKey].long += Math.ceil(f.downtime_hrs / dailyHrs);
       }
+      faultsByMonth[mKey].long += calcDaysOver2h(f);
     }
   });
   const sortedMonths = last12Months;
