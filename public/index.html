@@ -252,6 +252,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       <div class="card" style="padding-bottom:10px">
         <div class="card-head" style="display: flex; justify-content: space-between; align-items: center;">
           <span>Active Faults</span>
+          <span style="display:flex;align-items:center">Faults <label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="overviewOpenOnly" onchange="refreshOverview()" checked style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Open Only</label></span>
           <div id="overview-fault-buttons" style="display: none;">
             <button class="btn btn-sm" onclick="selectAllFaults('overview')">Select All</button>
             <button id="overviewBulkAckBtn" class="btn btn-sm btn-success" style="margin-left: 8px;" onclick="acknowledgeSelectedFaults('overview')" disabled>Acknowledge Selected</button>
@@ -268,6 +269,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">
         <label style="font-size:12px;color:var(--text3)">Period:</label>
         <select id="reportDays" onchange="loadAdminData()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;width:160px">
+          <option value="1">Last 24 hours</option>
           <option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option>
           <option value="90">Last 90 days</option><option value="365">Last 12 months</option>
           <option value="all">All Time</option>
@@ -290,12 +292,13 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
           <select id="faultFilterCategory" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px"><option value="">All Categories</option></select>
           <select id="faultFilterSeverity" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px"></select>
           <select id="faultFilterTime" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px">
-            <option value="all">All Time</option><option value="7days">Last 7 Days</option>
+            <option value="all">All Time</option><option value="24h">Last 24 Hours</option><option value="7days">Last 7 Days</option>
           </select>
           <select id="faultSort" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px">
             <option value="desc">Newest First</option><option value="asc">Oldest First</option>
           </select>
           <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="faultFilterUnresolved" onchange="renderAdminFaults()" checked style="width:auto">Open Only</label>
+          <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="faultFilterHideAck" onchange="renderAdminFaults()" style="width:auto">Hide Acknowledged</label>
           <button class="btn" style="margin-left:auto" onclick="selectAllFaults()">Select All</button>
           <button id="adminBulkAckBtn" class="btn btn-success" onclick="acknowledgeSelectedFaults()" disabled>Acknowledge Selected</button>
         </div>
@@ -538,6 +541,21 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
   </div>
 </div>
 
+<!-- FULL RESOLVE MODAL -->
+<div class="modal-overlay" id="fullResolveModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head"><h2>Resolve Fault</h2><button class="modal-close" onclick="closeModal('fullResolveModal')">&#10005;</button></div>
+    <input type="hidden" id="fullResolveFaultId">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Mark this acknowledged fault as fully resolved.</p>
+    <div class="form-group"><label>Resolved By <span style="color:var(--red)">*</span></label><input id="fullResolveUser" placeholder="Your initials or name"></div>
+    <div class="form-group"><label>Resolution Notes</label><textarea id="fullResolveNotes" placeholder="Optional details..." style="min-height:56px"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn" onclick="closeModal('fullResolveModal')">Cancel</button>
+      <button class="btn btn-success" onclick="submitFullResolve()">Resolve</button>
+    </div>
+  </div>
+</div>
+
 <!-- RESOLVE BREAKDOWN MODAL -->
 <div class="modal-overlay" id="resolveBreakdownModal">
   <div class="modal" style="max-width:400px">
@@ -734,7 +752,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="modal-head" style="justify-content:flex-end;margin-bottom:10px"><button class="modal-close" onclick="closeModal('aboutModal')">&#10005;</button></div>
     <div style="text-align:center;padding:0 0 20px">
       <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:300px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.32</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.33</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:20px">April 2026</p>
 
@@ -1145,7 +1163,8 @@ function refreshOverview(){
     const show=m.power||['breakdown','service','maintenance','offline'].includes(m.status);
     const bdStart=getBdTime(m);
     const bdHtml=(bdStart&&bdStart!=='loading')?`<span class="bd-timer" data-start="${bdStart}" style="margin-left:4px;font-family:var(--mono)"></span>`:'';
-    const openFaults=state.faults.filter(f=>f.machine_id===m.id&&f.status==='open');
+    const openFaults=state.faults.filter(f=>f.machine_id===m.id&&(f.status==='open'||(f.status==='resolved'&&!(f.severity&&f.severity.includes('High')||f.severity&&f.severity.includes('Critical')))));
+    const newFaults=state.faults.filter(f=>f.machine_id===m.id&&f.status==='open');
     const mConcessions=state.concessions.filter(c=>c.machine_id===m.id&&c.active===1);
     const recentFaults=state.faults.filter(f=>f.machine_id===m.id&&new Date((f.created_at||'').replace(' ','T')+'Z')>=thirtyDaysAgo);
     const bdCount=recentFaults.filter(f=>(f.severity&&(f.severity.includes('High')||f.severity.includes('Critical')))||f.downtime_hrs>0).length;
@@ -1156,9 +1175,9 @@ function refreshOverview(){
       <div class="mc-card-head"><div><div class="mc-card-name">${m.name}</div><div class="mc-card-model">${m.model}</div></div>
       <span class="badge ${show?meta.cls:'b-offline'}"><span class="badge-dot" style="background:${show?meta.dot:'#94a3b8'}"></span>${show?meta.label:'OFFLINE'}${bdHtml}</span></div>
       ${mConcessions.length?`<div class="alert ${mConcessions.some(c=>c.type==='Restriction')?'alert-red':'alert-amber'}" style="margin-bottom:8px;font-size:11px;padding:6px 10px">&#9888; ${mConcessions.length} active concession/restriction${mConcessions.length>1?'s':''}</div>`:''}
-      ${openFaults.length?`<div class="alert alert-amber" style="margin-bottom:8px;font-size:11px">&#9888; ${openFaults.length} open fault${openFaults.length>1?'s':''}</div>`:''}
+      ${newFaults.length?`<div class="alert alert-amber" style="margin-bottom:8px;font-size:11px">&#9888; ${newFaults.length} new fault${newFaults.length>1?'s':''}</div>`:''}
       <div class="mc-card-stats">
-        <div class="mc-mini"><div class="mc-mini-val" style="color:${recentFaults.length>0?'var(--text)':'var(--green)'}">${recentFaults.length}</div><div class="mc-mini-lbl">30-day faults</div></div>
+        <div class="mc-mini"><div class="mc-mini-val" style="color:${openFaults.length>0?'var(--text)':'var(--green)'}">${openFaults.length}</div><div class="mc-mini-lbl">Open faults</div></div>
         <div class="mc-mini"><div class="mc-mini-val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="mc-mini-lbl">30-day breakdowns</div></div>
       </div>
       <div class="uptime-bar"><div class="uptime-fill" style="width:${upPct}%;background:${upColor}"></div></div>
@@ -1168,15 +1187,22 @@ function refreshOverview(){
   document.getElementById('allActivityBody').innerHTML=state.activity.slice(0,12).map(a=>
     `<tr><td class="mono-cell">${fmtDT(a.created_at)}</td><td><span class="tag">${a.machine_name||a.machine_id}</span></td><td>${a.activity}</td><td>${a.user_name}</td><td class="${roleClass(a.user_role)}">${a.user_role}</td><td style="color:var(--text2);max-width:180px">${a.notes||''}</td></tr>`
   ).join('')||'<tr><td colspan="6" class="empty">No activity yet</td></tr>';
-  const open=state.faults.filter(f=>f.status==='open');
-  document.getElementById('activeFaultsEl').innerHTML = open.length ? open.map(f => faultRowHTML(f, true)).join('') : '<div class="empty">No active faults</div>';
+
+  const oCb = document.getElementById('overviewOpenOnly');
+  const showOpenOverview = oCb ? oCb.checked : true;
+  const overviewFaults = state.faults.filter(f => {
+    const isBd = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
+    const isOpenOrAck = f.status === 'open' || (f.status === 'resolved' && !isBd);
+    return showOpenOverview ? isOpenOrAck : true;
+  });
+  document.getElementById('activeFaultsEl').innerHTML = overviewFaults.length ? overviewFaults.map(f => faultRowHTML(f, true)).join('') : '<div class="empty">No faults to display</div>';
   
   const buttonContainer = document.getElementById('overview-fault-buttons');
   if (buttonContainer) {
-    const ackableFaults = open.filter(f => {
+    const ackableFaults = overviewFaults.filter(f => {
         const m=state.machines.find(x=>x.id===f.machine_id);
         const isBreakdown=f.severity.includes('High')||f.severity.includes('Critical')||(m&&m.status==='breakdown'&&f.status==='open');
-        return !isBreakdown;
+        return !isBreakdown && f.status === 'open';
     });
     buttonContainer.style.display = ackableFaults.length > 0 ? 'block' : 'none';
   }
@@ -1194,6 +1220,15 @@ function refreshMachinePage(machineId){
   const activeTabPane = el.querySelector('.tab-pane.active');
   const activeTabId = activeTabPane ? activeTabPane.id : `mt-log-${machineId}`;
 
+  const fCb = document.getElementById(`faultsOpenOnly-${machineId}`);
+  const fHideAckCb = document.getElementById(`faultsHideAck-${machineId}`);
+  const f30Cb = document.getElementById(`faults30DaysOnly-${machineId}`);
+  const b30Cb = document.getElementById(`breakdowns30DaysOnly-${machineId}`);
+  const showOpenFaults = fCb ? fCb.checked : true;
+  const hideAckFaults = fHideAckCb ? fHideAckCb.checked : false;
+  const show30Faults = f30Cb ? f30Cb.checked : true;
+  const show30Breakdowns = b30Cb ? b30Cb.checked : true;
+
   const meta=STATUS_META[m.status]||STATUS_META.offline;
   const show=m.power||['breakdown','service','maintenance','offline'].includes(m.status);
   const bdStart=getBdTime(m);
@@ -1201,9 +1236,32 @@ function refreshMachinePage(machineId){
   const mActivity=state.activity.filter(a=>a.machine_id===machineId);
   const mFaults=state.faults.filter(f=>f.machine_id===machineId);
   const mBreakdowns=mFaults.filter(f=>(f.severity&&(f.severity.includes('High')||f.severity.includes('Critical')))||f.downtime_hrs>0);
-  const openFaults=mFaults.filter(f=>f.status==='open');
-  const mConcessions=state.concessions.filter(c=>c.machine_id===m.id&&c.active===1);
   const thirtyDaysAgo=new Date();thirtyDaysAgo.setDate(thirtyDaysAgo.getDate()-30);
+  
+  let dispFaults = mFaults;
+  if(showOpenFaults) {
+    dispFaults = dispFaults.filter(f => {
+      const isBd = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
+      return f.status === 'open' || (f.status === 'resolved' && !isBd);
+    });
+  }
+  if(hideAckFaults) {
+    dispFaults = dispFaults.filter(f => {
+      const isBd = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
+      return !(f.status === 'resolved' && !isBd);
+    });
+  }
+  if(show30Faults) {
+    dispFaults = dispFaults.filter(f => new Date((f.created_at||'').replace(' ','T')+'Z') >= thirtyDaysAgo);
+  }
+  let dispBreakdowns = mBreakdowns;
+  if(show30Breakdowns) {
+    dispBreakdowns = dispBreakdowns.filter(f => new Date((f.created_at||'').replace(' ','T')+'Z') >= thirtyDaysAgo);
+  }
+
+  const openFaults=mFaults.filter(f=>f.status==='open'||(f.status==='resolved'&&!(f.severity&&f.severity.includes('High')||f.severity&&f.severity.includes('Critical'))));
+  const newFaults=mFaults.filter(f=>f.status==='open');
+  const mConcessions=state.concessions.filter(c=>c.machine_id===m.id&&c.active===1);
   const recentFaults=mFaults.filter(f=>new Date((f.created_at||'').replace(' ','T')+'Z')>=thirtyDaysAgo);
   const recentDt=recentFaults.reduce((s,f)=>s+Number(f.downtime_hrs||0),0);
   const potentialHrs=getTotalWorkingHours(30);
@@ -1250,7 +1308,7 @@ function refreshMachinePage(machineId){
       <div class="stat-card"><div class="lbl">Open Faults</div><div class="val" style="color:${openFaults.length?'var(--red)':'var(--green)'}">${openFaults.length}</div><div class="sub">${recentFaults.length} in last 30 days</div></div>
       <div class="stat-card"><div class="lbl">Breakdowns</div><div class="val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="sub">Last 30 days</div></div>
     </div>
-    ${openFaults.length?`<div class="section-hd" style="margin-top:8px;margin-bottom:8px"><span>Open Faults</span></div><div class="alert alert-amber" style="margin-bottom:16px">&#9888; ${openFaults.length} open fault${openFaults.length>1?'s':''} &mdash; ${openFaults[0].category}</div>`:''}
+    ${newFaults.length?`<div class="section-hd" style="margin-top:8px;margin-bottom:8px"><span>New Faults</span></div><div class="alert alert-amber" style="margin-bottom:16px">&#9888; ${newFaults.length} new fault${newFaults.length>1?'s':''} &mdash; ${newFaults[0].category}</div>`:''}
     <div class="tabs">
       <button class="tab active" onclick="switchMTab(this,'mt-log-${machineId}')">Activity Log</button>
       <button class="tab" onclick="switchMTab(this,'mt-faults-${machineId}')">Faults (${mFaults.length})</button>
@@ -1267,14 +1325,20 @@ function refreshMachinePage(machineId){
     </div>
     <div id="mt-faults-${machineId}" class="tab-pane">
       <div class="section-hd">
-        <span>Fault History</span>
+        <span style="display:flex;align-items:center">Fault History 
+          <label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="faultsOpenOnly-${machineId}" onchange="refreshMachinePage('${machineId}')" ${showOpenFaults ? 'checked' : ''} style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Open Only</label>
+          <label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="faultsHideAck-${machineId}" onchange="refreshMachinePage('${machineId}')" ${hideAckFaults ? 'checked' : ''} style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Hide Acknowledged</label>
+          <label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="faults30DaysOnly-${machineId}" onchange="refreshMachinePage('${machineId}')" ${show30Faults ? 'checked' : ''} style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Last 30 Days</label>
+        </span>
         <div><button class="btn btn-sm" style="margin-right:8px" onclick="selectAllFaults('${machineId}')">Select All</button><button id="machineBulkAckBtn-${machineId}" class="btn btn-sm btn-success" style="margin-right:8px" onclick="acknowledgeSelectedFaults('${machineId}')" disabled>Acknowledge Selected</button><button class="btn btn-sm btn-danger" onclick="openFaultFor('${machineId}')">+ Report Fault</button></div>
       </div>
-      ${mFaults.length?mFaults.map(f=>faultRowHTML(f,false)).join(''):'<div class="empty">No faults recorded</div>'}
+      ${dispFaults.length?dispFaults.map(f=>faultRowHTML(f,false)).join(''):'<div class="empty">No faults to display</div>'}
     </div>
     <div id="mt-breakdowns-${machineId}" class="tab-pane">
-      <div class="section-hd"><span>Breakdown History</span></div>
-      ${mBreakdowns.length?mBreakdowns.map(f=>faultRowHTML(f,false)).join(''):'<div class="empty">No breakdowns recorded</div>'}
+      <div class="section-hd"><span style="display:flex;align-items:center">Breakdown History 
+        <label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="breakdowns30DaysOnly-${machineId}" onchange="refreshMachinePage('${machineId}')" ${show30Breakdowns ? 'checked' : ''} style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Last 30 Days</label>
+      </span></div>
+      ${dispBreakdowns.length?dispBreakdowns.map(f=>faultRowHTML(f,false)).join(''):'<div class="empty">No breakdowns to display</div>'}
     </div>
     <div id="mt-info-${machineId}" class="tab-pane">
       <div class="card"><div class="card-head">Machine Specifications</div><div class="card-body">
@@ -1290,28 +1354,40 @@ function refreshMachinePage(machineId){
     el.querySelector('.tab-pane.active')?.classList.remove('active');
     switchMTab(newActiveBtn, activeTabId);
   }
+  setTimeout(updateBulkButtons, 0);
 }
 
 function faultRowHTML(f,showMachine){
   const m=state.machines.find(x=>x.id===f.machine_id);
   const isBreakdown=f.severity.includes('High')||f.severity.includes('Critical')||(m&&m.status==='breakdown'&&f.status==='open');
-  const open=f.status==='open',sevColor=isBreakdown?'var(--red)':f.severity.includes('Medium')?'var(--amber)':'var(--blue)';
-  const checkbox = (open && !isBreakdown) ? `<input type="checkbox" class="fault-select-cb" value="${f.id}" style="margin-right:8px;transform:scale(1.2);flex-shrink:0" onchange="updateBulkButtons()">` : `<div style="width:25px;flex-shrink:0"></div>`;
+  const isUnack=f.status==='open';
+  const isAck=f.status==='resolved'&&!isBreakdown;
+  const isClosed=f.status==='closed'||(f.status==='resolved'&&isBreakdown);
+  const sevColor=isBreakdown?'var(--red)':f.severity.includes('Medium')?'var(--amber)':'var(--blue)';
+  const checkbox = (isUnack && !isBreakdown) ? `<input type="checkbox" class="fault-select-cb" value="${f.id}" style="margin-right:8px;transform:scale(1.2);flex-shrink:0" onchange="updateBulkButtons()">` : `<div style="width:25px;flex-shrink:0"></div>`;
   const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
   const codesHtml = codes.length > 0 ? codes.map(c => `<span class="tag" style="background:var(--blue-bg);color:var(--blue);margin-right:4px;cursor:pointer" onclick="filterByCode('${c}'); event.stopPropagation();" title="Click to filter by this code">${c}</span>`).join('') : '';
   const screenshotHtml = f.screenshot_taken ? `<span class="tag" style="background:var(--green-bg);color:var(--green);">&#128247; Screenshot</span>` : '';
+  
+  let iconBg = 'var(--green-bg)', iconCol = 'var(--green)', iconChar = '&#10003;';
+  let statusText = 'RESOLVED', statusCol = 'var(--text3)';
+  if (isUnack) { iconBg = 'var(--red-bg)'; iconCol = 'var(--red)'; iconChar = '&#9888;'; statusText = 'OPEN'; statusCol = 'var(--red)'; }
+  else if (isAck) { iconBg = 'var(--amber-bg)'; iconCol = 'var(--amber)'; iconChar = '&#9888;'; statusText = 'OPEN (ACKNOWLEDGED)'; statusCol = 'var(--amber)'; }
+  else if (isClosed) { iconBg = 'var(--slate-bg)'; iconCol = 'var(--slate)'; iconChar = '&#10003;'; statusText = 'RESOLVED'; statusCol = 'var(--text3)'; }
+  
   return`<div class="fault-row" style="align-items:center">
     ${checkbox}
-    <div class="fault-icon" style="background:${open?'var(--red-bg)':'var(--green-bg)'};color:${open?'var(--red)':'var(--green)'}">${open?'&#9888;':'&#10003;'}</div>
+    <div class="fault-icon" style="background:${iconBg};color:${iconCol}">${iconChar}</div>
     <div class="fault-info"><h4>${showMachine?`<span class="tag">${f.machine_name||f.machine_id}</span> &nbsp;`:''}${f.category} <span style="color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px">${f.severity}</span></h4>
     <p>${f.description}</p>
     ${codes.length || f.screenshot_taken ? `<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">${codesHtml}${screenshotHtml}</div>` : ''}
     <div style="margin-top:5px;font-size:11px;color:var(--text3)">${f.user_name} (${f.user_role}) &middot; ${fmtD(f.created_at)}${f.resolved_at?` &middot; ${isBreakdown?'Resolved':'Acknowledged'} by ${f.resolved_by} on ${fmtD(f.resolved_at)}${f.downtime_hrs ? ` &middot; ${Number(f.downtime_hrs).toFixed(2)}h downtime` : ''}`:''}</div>
     </div>
     <div class="fault-meta" style="display:flex;align-items:center;gap:10px">
-      <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:${open?'var(--red)':'var(--green)'}">${open?'OPEN':(isBreakdown?'RESOLVED':'ACKNOWLEDGED')}</span>
+      <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:${statusCol}">${statusText}</span>
       ${(currentPage === 'admin' || !showMachine) ? `<button class="btn btn-sm" style="padding:2px 8px;" onclick="openEditFault(${f.id})">Edit</button>` : ''}
-      ${open?`<button class="btn btn-success btn-sm" onclick="openResolve(${f.id})">${isBreakdown?'Resolve':'Acknowledge'}</button>`:''}
+      ${isUnack?`<button class="btn btn-success btn-sm" onclick="openResolve(${f.id})">${isBreakdown?'Resolve':'Acknowledge'}</button>`:''}
+      ${isAck ? `<button class="btn btn-primary btn-sm" style="padding:2px 8px;" onclick="openFullResolve(${f.id})">Resolve</button>` : ''}
       ${showMachine?`<button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="deleteFaultRecord(${f.id})" title="Delete Fault">&#10005;</button>`:''}
     </div>
   </div>`;
@@ -1503,6 +1579,27 @@ async function submitResolve(){
   const f=state.faults.find(x=>x.id===parseInt(document.getElementById('resolveFaultId').value));
   const isBreakdown=f&&(f.severity.includes('High')||f.severity.includes('Critical'));
   closeModal('resolveModal');toast(isBreakdown?'Breakdown resolved':'Fault acknowledged','success');
+}
+
+function openFullResolve(faultId) {
+  document.getElementById('fullResolveFaultId').value = faultId;
+  document.getElementById('fullResolveUser').value = '';
+  document.getElementById('fullResolveNotes').value = '';
+  openModal('fullResolveModal');
+  setTimeout(() => document.getElementById('fullResolveUser').focus(), 100);
+}
+
+async function submitFullResolve() {
+  const faultId = document.getElementById('fullResolveFaultId').value;
+  const user = document.getElementById('fullResolveUser').value.trim();
+  const notes = document.getElementById('fullResolveNotes').value.trim();
+  if (!user) { toast('Please enter your name', 'error'); return; }
+
+  const res = await api('PATCH', `/faults/${faultId}/close`, { closed_by: user, notes });
+  if (res) {
+    toast('Fault fully resolved', 'success');
+    closeModal('fullResolveModal');
+  }
 }
 
 function updateBulkButtons() {
@@ -2404,7 +2501,12 @@ async function loadAdminData(){
     s.long_faults = faults.filter(f => f.machine_id === s.machine.id && ((f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) || f.downtime_hrs > 0)).reduce((sum, f) => sum + calcDaysOver2h(f), 0);
     s.breakdown_count = faults.filter(f => f.machine_id === s.machine.id && (f.severity.includes('High') || f.severity.includes('Critical'))).length;
   });
-  const totalDt=summary.reduce((s,m)=>s+m.downtime_hrs,0),totalFaults=summary.reduce((s,m)=>s+m.fault_count,0),openFaults=summary.reduce((s,m)=>s+m.open_faults,0);
+  const totalDt=summary.reduce((s,m)=>s+m.downtime_hrs,0);
+  const totalFaults=summary.reduce((s,m)=>s+m.fault_count,0);
+  const openFaults = faults.filter(f => {
+      const isBreakdown = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
+      return f.status === 'open' || (f.status === 'resolved' && !isBreakdown);
+  }).length;
   document.getElementById('adminMetrics').innerHTML=`
     <div class="metric-card"><div class="lbl">Activity Entries</div><div class="val">${activity.length}</div><div class="sub">in period</div></div>
     <div class="metric-card"><div class="lbl">Faults Reported</div><div class="val" style="color:var(--red)">${totalFaults}</div><div class="sub">${openFaults} open</div></div>
@@ -2514,10 +2616,11 @@ async function loadAdminData(){
   renderDtTable();
   
   const totalWorkingHours = getTotalWorkingHours(parseInt(adminReport.period_days));
+  const displayPeriodLabel = adminReport.period_days === 1 ? 'Last 24 Hours' : adminReport.period_label;
 
   document.getElementById('adminUtil').innerHTML=`
     <div class="card" style="margin-bottom:16px">
-      <div class="card-head">Status Breakdown (${adminReport.period_label})</div>
+      <div class="card-head">Status Breakdown (${displayPeriodLabel})</div>
       <div class="card-body" style="padding:0">
         <div style="display:flex;gap:12px;padding:12px 16px;font-size:11px;font-family:var(--mono);flex-wrap:wrap;border-bottom:1px solid var(--border)">
           <span style="color:var(--green)">&#9632; Clinical</span>
@@ -2539,7 +2642,7 @@ async function loadAdminData(){
     </div>
     <div class="card">
       <div class="card-head" style="display:flex;justify-content:space-between;align-items:center">
-        <span>True Clinical Utilisation (${adminReport.period_label})</span>
+        <span>True Clinical Utilisation (${displayPeriodLabel})</span>
         <div style="display:flex;gap:12px">
           <span style="font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text3);cursor:pointer;letter-spacing:0.04em" onclick="sortUtil2('name')" title="Sort by Name">Sort Name &#8597;</span>
           <span style="font-size:10px;font-family:var(--mono);text-transform:uppercase;color:var(--text3);cursor:pointer;letter-spacing:0.04em" onclick="sortUtil2('pct')" title="Sort by %">Sort % &#8597;</span>
@@ -2571,7 +2674,10 @@ function renderAudit(){
   const machineF = document.getElementById('auditFilterMachine').value;
   const actionF = document.getElementById('auditFilterAction').value;
   const sortD = document.getElementById('auditSort').value;
+  const show30Days = document.getElementById('auditFilter30Days') ? document.getElementById('auditFilter30Days').checked : true;
+  const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   let filtered = currentAuditData.filter(r => {
+    if(show30Days && new Date((r.created_at||'').replace(' ','T')+'Z') < thirtyDaysAgo) return false;
     if(search && !r.user_name.toLowerCase().includes(search) && !(r.detail||'').toLowerCase().includes(search)) return false;
     if(machineF && r.machine_id !== machineF) return false;
     if(actionF && r.action !== actionF) return false;
@@ -2719,12 +2825,23 @@ function renderAdminFaults(){
   const category = document.getElementById('faultFilterCategory').value;
   const severity = document.getElementById('faultFilterSeverity').value;
   const unresolved = document.getElementById('faultFilterUnresolved').checked;
+  const hideAck = document.getElementById('faultFilterHideAck') ? document.getElementById('faultFilterHideAck').checked : false;
   const sort = document.getElementById('faultSort').value;
   const timeFilter = document.getElementById('faultFilterTime').value;
   const sevenDaysAgo=new Date();sevenDaysAgo.setDate(sevenDaysAgo.getDate()-7);
+  const oneDayAgo=new Date();oneDayAgo.setDate(oneDayAgo.getDate()-1);
   let filtered=adminReport.faults.filter(f=>{
     if(timeFilter==='7days'&&new Date((f.created_at||'').replace(' ','T')+'Z')<sevenDaysAgo)return false;
-    if(unresolved&&f.status!=='open')return false;
+    if(timeFilter==='24h'&&new Date((f.created_at||'').replace(' ','T')+'Z')<oneDayAgo)return false;
+    if(unresolved){
+      const isBd = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
+      const isOpenOrAck = f.status === 'open' || (f.status === 'resolved' && !isBd);
+      if (!isOpenOrAck) return false;
+    }
+    if(hideAck){
+      const isBd = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
+      if (f.status === 'resolved' && !isBd) return false;
+    }
     if(machine&&f.machine_id!==machine)return false;
     if(category&&f.category!==category)return false;
     if(severity&&f.severity!==severity)return false;
@@ -2851,6 +2968,7 @@ document.addEventListener('keydown', e => {
       else if (openM.id === 'powerModal') confirmPower();
       else if (openM.id === 'statusConfirmModal') confirmStatusChange();
       else if (openM.id === 'resolveModal') submitResolve();
+      else if (openM.id === 'fullResolveModal') submitFullResolve();
       else if (openM.id === 'editFaultModal') submitEditFault();
       else if (openM.id === 'bulkAcknowledgeModal') submitBulkAcknowledge();
       else if (openM.id === 'resolveBreakdownModal') confirmBreakdownResolve();
@@ -2894,6 +3012,10 @@ setInterval(()=>{
     el.textContent = `(${hrs.toString().padStart(2,'0')}:${mins.toString().padStart(2,'0')})`;
   });
 },1000);
+connectWS();
+</script>
+</body>
+</html>
 connectWS();
 </script>
 </body>

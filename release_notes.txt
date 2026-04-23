@@ -1,15 +1,27 @@
-v1.3
--Fix - Utilisation data includes offline time and calculate within core clinical hours only
--Fix - Utilisation charts correctly display clinical utilisation percentages
--Updated -  Status label from available to clinical
--Updated -  Multiple machines can now be toggled on/off under category analysis
--Added - Edit downtime for breakdown events
--Added - Select and acknowledge multiple faults simultaneously
--Added - Edit time stamps for individual events via the audit log
--Added - Edit faults/breakdowns direct from equipment page
--Added - Fault codes: Add/edit fault codes, summary view and search via admin
--Added - Flag faults/breakdowns with screenshots
--Added - Release notes available via About page
+-v1.33
+    -Updated - changes to some summary display/figures, new faults display on summary page
+    -Added - Ability to resolve faults, filter on open only
+    -Added 24h to time period option
+-v1.32
+    -Added IT to roles list
+-v1.31
+    -Added ability to upload new firmware
+    -Fixed days >2h bug
+-v1.3
+    -Fix - Utilisation data includes offline time and calculate within core clinical hours only
+    -Fix - Utilisation charts correctly display clinical utilisation percentages
+    -Updated -  Status label from available to clinical
+    -Updated -  Multiple machines can now be toggled on/off under category analysis
+    -Added - Edit downtime for breakdown events
+    -Added - Select and acknowledge multiple faults simultaneously
+    -Added - Edit time stamps for individual events via the audit log
+    -Added - Edit faults/breakdowns direct from equipment page
+    -Added - Fault codes: Add/edit fault codes, summary view and search via admin
+    -Added - Flag faults/breakdowns with screenshots
+    -Added - Release notes available via About page
 
 
 
+On the admin/reports page the faults reported card indicates the number of open faults but it doesn't seem to be calculating correctly, it's showing as zero
+
+on the individual equipment pages rather than displaying the number of new faults display the number of open faults with the number of faults in the last 30 days underneath.

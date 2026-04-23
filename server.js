@@ -404,6 +404,31 @@ app.patch('/api/faults/:id/resolve', (req, res) => {
   res.json(fault);
 });
 
+// PATCH fault fully resolve
+app.patch('/api/faults/:id/close', (req, res) => {
+  const { id } = req.params;
+  const { closed_by, notes } = req.body;
+  if (!closed_by) return res.status(400).json({ error: 'closed_by required' });
+
+  const fault = db.prepare('SELECT * FROM faults WHERE id=?').get(id);
+  if (!fault) return res.status(404).json({ error: 'Not found' });
+
+  let newDesc = fault.description;
+  if (notes) newDesc += `\n\n[Resolved by ${closed_by}]: ${notes}`;
+  else newDesc += `\n\n[Resolved by ${closed_by}]`;
+
+  db.prepare(`UPDATE faults SET status='closed', description=? WHERE id=?`).run(newDesc, id);
+
+  queries.insertAudit.run({
+    machine_id: fault.machine_id, user_name: closed_by, action: 'FAULT_CLOSED',
+    detail: `Fault #${id} fully resolved.`, ip_address: req.clientIp
+  });
+
+  const updatedFault = db.prepare('SELECT f.*, m.name as machine_name FROM faults f JOIN machines m ON f.machine_id=m.id WHERE f.id=?').get(id);
+  broadcast('fault_updated', updatedFault);
+  res.json(updatedFault);
+});
+
 // POST bulk acknowledge faults
 app.post('/api/faults/bulk-acknowledge', (req, res) => {
   const { ids, resolved_by } = req.body;
