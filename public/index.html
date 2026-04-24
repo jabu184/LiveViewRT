@@ -154,6 +154,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
 .btn-success{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
 .btn-success:hover{background:var(--green);color:#fff}
 .btn-sm{padding:4px 10px;font-size:11px}
+.btn:disabled{background:var(--bg3)!important;color:var(--text3)!important;border-color:var(--border)!important;cursor:not-allowed;box-shadow:none!important}
 
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,25,35,.35);backdrop-filter:blur(2px);z-index:300;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
@@ -252,9 +253,10 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       <div class="card" style="padding-bottom:10px">
         <div class="card-head" style="display: flex; justify-content: space-between; align-items: center;">
           <span>Active Faults</span>
-          <span style="display:flex;align-items:center">Faults <label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="overviewOpenOnly" onchange="refreshOverview()" checked style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Open Only</label></span>
+          <span style="display:flex;align-items:center">Faults <label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="overviewOpenOnly" onchange="refreshOverview()" checked style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Open Only</label><label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="overviewHideAck" onchange="refreshOverview()" checked style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Hide Acknowledged</label></span>
           <div id="overview-fault-buttons" style="display: none;">
             <button class="btn btn-sm" onclick="selectAllFaults('overview')">Select All</button>
+            <button id="overviewBulkAckOnlyBtn" class="btn btn-sm btn-primary" style="margin-left: 8px;" onclick="bulkAcknowledgeOnly('overview')" disabled>Acknowledge Selected</button>
             <button id="overviewBulkAckBtn" class="btn btn-sm btn-success" style="margin-left: 8px;" onclick="acknowledgeSelectedFaults('overview')" disabled>Close Selected</button>
           </div>
         </div>
@@ -286,21 +288,19 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       </div>
       <div id="atab-faults" class="tab-pane active">
         <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-          <input id="faultCodeSearch" placeholder="Search fault codes..." oninput="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:150px">
-          <input id="faultSearch" placeholder="Search faults..." oninput="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:150px">
+          <input id="faultSearch" placeholder="Search descriptions, codes..." oninput="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:180px">
           <select id="faultFilterMachine" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px"><option value="">All Machines</option></select>
           <select id="faultFilterCategory" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px"><option value="">All Categories</option></select>
           <select id="faultFilterSeverity" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px"></select>
-          <select id="faultFilterTime" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px">
-            <option value="all">All Time</option><option value="24h">Last 24 Hours</option><option value="7days">Last 7 Days</option>
-          </select>
           <select id="faultSort" onchange="renderAdminFaults()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:130px">
             <option value="desc">Newest First</option><option value="asc">Oldest First</option>
           </select>
           <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="faultFilterUnresolved" onchange="renderAdminFaults()" checked style="width:auto">Open Only</label>
           <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="faultFilterHideAck" onchange="renderAdminFaults()" style="width:auto">Hide Acknowledged</label>
+          <button id="faultResetBtn" class="btn btn-sm" style="margin-left:4px" onclick="resetAdminFaultFilters()" disabled>Reset</button>
           <button class="btn" style="margin-left:auto" onclick="selectAllFaults()">Select All</button>
-          <button id="adminBulkAckBtn" class="btn btn-success" onclick="acknowledgeSelectedFaults()" disabled>Close Selected</button>
+          <button id="adminBulkAckOnlyBtn" class="btn btn-primary" style="margin-left:8px" onclick="bulkAcknowledgeOnly()" disabled>Acknowledge Selected</button>
+          <button id="adminBulkAckBtn" class="btn btn-success" style="margin-left:8px" onclick="acknowledgeSelectedFaults()" disabled>Close Selected</button>
         </div>
         <div id="adminFaultList"></div>
       </div>
@@ -518,6 +518,20 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('bulkAcknowledgeModal')">Cancel</button>
       <button class="btn btn-success" onclick="submitBulkAcknowledge()">Close All</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK ACKNOWLEDGE ONLY MODAL -->
+<div class="modal-overlay" id="bulkAckOnlyModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head"><h2>Acknowledge Multiple Faults</h2><button class="modal-close" onclick="closeModal('bulkAckOnlyModal')">&#10005;</button></div>
+    <input type="hidden" id="bulkAckOnlyIds">
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px" id="bulkAckOnlyDesc"></p>
+    <div class="form-group"><label>Acknowledged By <span style="color:var(--red)">*</span></label><input id="bulkAckOnlyUser" placeholder="Your name"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn" onclick="closeModal('bulkAckOnlyModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitBulkAckOnly()">Acknowledge All</button>
     </div>
   </div>
 </div>
@@ -1193,11 +1207,15 @@ function refreshOverview(){
   ).join('')||'<tr><td colspan="6" class="empty">No activity yet</td></tr>';
 
   const oCb = document.getElementById('overviewOpenOnly');
+  const oHideAckCb = document.getElementById('overviewHideAck');
   const showOpenOverview = oCb ? oCb.checked : true;
+  const hideAckOverview = oHideAckCb ? oHideAckCb.checked : true;
   const overviewFaults = state.faults.filter(f => {
     const isBd = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
     const isOpenOrAck = f.status === 'open' || (f.status === 'resolved' && !isBd);
-    return showOpenOverview ? isOpenOrAck : true;
+    if (showOpenOverview && !isOpenOrAck) return false;
+    if (hideAckOverview && f.status === 'resolved' && !isBd) return false;
+    return true;
   });
   document.getElementById('activeFaultsEl').innerHTML = overviewFaults.length ? overviewFaults.map(f => faultRowHTML(f, true)).join('') : '<div class="empty">No faults to display</div>';
   
@@ -1346,7 +1364,7 @@ function refreshMachinePage(machineId){
           <label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="faultsHideAck-${machineId}" onchange="refreshMachinePage('${machineId}')" ${hideAckFaults ? 'checked' : ''} style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Hide Acknowledged</label>
           <label style="font-weight:normal;text-transform:none;font-size:11px;margin-left:12px;cursor:pointer;letter-spacing:normal;color:var(--text2)"><input type="checkbox" id="faults30DaysOnly-${machineId}" onchange="refreshMachinePage('${machineId}')" ${show30Faults ? 'checked' : ''} style="vertical-align:middle;margin-right:4px;position:relative;top:-1px">Last 30 Days</label>
         </span>
-        <div><button class="btn btn-sm" style="margin-right:8px" onclick="selectAllFaults('${machineId}')">Select All</button><button id="machineBulkAckBtn-${machineId}" class="btn btn-sm btn-success" style="margin-right:8px" onclick="acknowledgeSelectedFaults('${machineId}')" disabled>Close Selected</button><button class="btn btn-sm btn-danger" onclick="openFaultFor('${machineId}')">+ Report Fault</button></div>
+        <div><button class="btn btn-sm" style="margin-right:8px" onclick="selectAllFaults('${machineId}')">Select All</button><button id="machineBulkAckOnlyBtn-${machineId}" class="btn btn-sm btn-primary" style="margin-right:8px" onclick="bulkAcknowledgeOnly('${machineId}')" disabled>Acknowledge Selected</button><button id="machineBulkAckBtn-${machineId}" class="btn btn-sm btn-success" style="margin-right:8px" onclick="acknowledgeSelectedFaults('${machineId}')" disabled>Close Selected</button><button class="btn btn-sm btn-danger" onclick="openFaultFor('${machineId}')">+ Report Fault</button></div>
       </div>
       ${dispFaults.length?dispFaults.map(f=>faultRowHTML(f,false)).join(''):'<div class="empty">No faults to display</div>'}
     </div>
@@ -1380,9 +1398,10 @@ function faultRowHTML(f,showMachine){
   const isAck=f.status==='resolved'&&!isBreakdown;
   const isClosed=f.status==='closed'||(f.status==='resolved'&&isBreakdown);
   const sevColor=isBreakdown?'var(--red)':f.severity.includes('Medium')?'var(--amber)':'var(--blue)';
-  const checkbox = (!isClosed && !isBreakdown) ? `<input type="checkbox" class="fault-select-cb" value="${f.id}" style="margin-right:8px;transform:scale(1.2);flex-shrink:0" onchange="updateBulkButtons()">` : `<div style="width:25px;flex-shrink:0"></div>`;
+  const checkbox = (!isClosed && !isBreakdown) ? `<input type="checkbox" class="fault-select-cb" value="${f.id}" data-status="${f.status}" style="margin-right:8px;transform:scale(1.2);flex-shrink:0" onchange="updateBulkButtons()">` : `<div style="width:25px;flex-shrink:0"></div>`;
   const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
-  const codesHtml = codes.length > 0 ? codes.map(c => `<span class="tag" style="background:var(--blue-bg);color:var(--blue);margin-right:4px;cursor:pointer" onclick="filterByCode('${c}'); event.stopPropagation();" title="Click to filter by this code">${c}</span>`).join('') : '';
+  const canFilter = currentPage === 'admin';
+  const codesHtml = codes.length > 0 ? codes.map(c => `<span class="tag" style="background:var(--blue-bg);color:var(--blue);margin-right:4px${canFilter ? ';cursor:pointer' : ''}" ${canFilter ? `onclick="filterByCode('${c}'); event.stopPropagation();" title="Click to filter by this code"` : ''}>${c}</span>`).join('') : '';
   const screenshotHtml = f.screenshot_taken ? `<span class="tag" style="background:var(--green-bg);color:var(--green);">&#128247; Screenshot</span>` : '';
   
   let iconBg = 'var(--green-bg)', iconCol = 'var(--green)', iconChar = '&#10003;';
@@ -1391,10 +1410,14 @@ function faultRowHTML(f,showMachine){
   else if (isAck) { iconBg = 'var(--amber-bg)'; iconCol = 'var(--amber)'; iconChar = '&#9888;'; statusText = 'OPEN (ACKNOWLEDGED)'; statusCol = 'var(--amber)'; }
   else if (isClosed) { iconBg = 'var(--slate-bg)'; iconCol = 'var(--slate)'; iconChar = '&#10003;'; statusText = 'RESOLVED'; statusCol = 'var(--text3)'; }
   
+  const machHtml = showMachine ? (canFilter ? `<span class="tag" style="cursor:pointer" onclick="quickFilterFaults('faultFilterMachine', '${f.machine_id}'); event.stopPropagation();" title="Click to filter by this machine">${f.machine_name||f.machine_id}</span> &nbsp;` : `<span class="tag">${f.machine_name||f.machine_id}</span> &nbsp;`) : '';
+  const catHtml = canFilter ? `<span style="cursor:pointer" onclick="quickFilterFaults('faultFilterCategory', '${f.category.replace(/'/g, "\\'")}'); event.stopPropagation();" title="Click to filter by this category">${f.category}</span>` : `<span>${f.category}</span>`;
+  const sevHtml = canFilter ? `<span style="cursor:pointer;color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px" onclick="quickFilterFaults('faultFilterSeverity', '${f.severity.replace(/'/g, "\\'")}'); event.stopPropagation();" title="Click to filter by this severity">${f.severity}</span>` : `<span style="color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px">${f.severity}</span>`;
+
   return`<div class="fault-row" style="align-items:center">
     ${checkbox}
     <div class="fault-icon" style="background:${iconBg};color:${iconCol}">${iconChar}</div>
-    <div class="fault-info"><h4>${showMachine?`<span class="tag">${f.machine_name||f.machine_id}</span> &nbsp;`:''}${f.category} <span style="color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px">${f.severity}</span></h4>
+    <div class="fault-info"><h4>${machHtml}${catHtml} ${sevHtml}</h4>
     <p>${f.description}</p>
     ${codes.length || f.screenshot_taken ? `<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">${codesHtml}${screenshotHtml}</div>` : ''}
     <div style="margin-top:5px;font-size:11px;color:var(--text3)">${f.user_name} (${f.user_role}) &middot; ${fmtD(f.created_at)}${f.resolved_at?` &middot; ${isBreakdown?'Resolved':'Acknowledged'} by ${f.resolved_by} on ${fmtD(f.resolved_at)}${f.downtime_hrs ? ` &middot; ${Number(f.downtime_hrs).toFixed(2)}h downtime` : ''}`:(isUnack&&isBreakdown?` &middot; ${getFaultDowntime(f).toFixed(2)}h ongoing downtime`:'')}</div>
@@ -1409,11 +1432,51 @@ function faultRowHTML(f,showMachine){
   </div>`;
 }
 
+function quickFilterFaults(field, value) {
+  showPage('admin');
+  const btn = document.querySelector('#page-admin .tabs .tab');
+  if (btn) switchAdminTab(btn, 'atab-faults');
+  const el = document.getElementById(field);
+  if (el) el.value = value;
+  renderAdminFaults();
+}
+
+function resetAdminFaultFilters() {
+  document.getElementById('faultSearch').value = '';
+  document.getElementById('faultFilterMachine').value = '';
+  document.getElementById('faultFilterCategory').value = '';
+  document.getElementById('faultFilterSeverity').value = '';
+  document.getElementById('faultSort').value = 'desc';
+  document.getElementById('faultFilterUnresolved').checked = true;
+  if (document.getElementById('faultFilterHideAck')) document.getElementById('faultFilterHideAck').checked = false;
+  renderAdminFaults();
+}
+
+function quickFilterFaults(field, value) {
+  showPage('admin');
+  const btn = document.querySelector('#page-admin .tabs .tab');
+  if (btn) switchAdminTab(btn, 'atab-faults');
+  const el = document.getElementById(field);
+  if (el) el.value = value;
+  renderAdminFaults();
+}
+
+function resetAdminFaultFilters() {
+  document.getElementById('faultSearch').value = '';
+  document.getElementById('faultFilterMachine').value = '';
+  document.getElementById('faultFilterCategory').value = '';
+  document.getElementById('faultFilterSeverity').value = '';
+  document.getElementById('faultSort').value = 'desc';
+  document.getElementById('faultFilterUnresolved').checked = true;
+  if (document.getElementById('faultFilterHideAck')) document.getElementById('faultFilterHideAck').checked = false;
+  renderAdminFaults();
+}
+
 function filterByCode(code) {
   showPage('admin');
   const btn = document.querySelector('#page-admin .tabs .tab');
   if (btn) switchAdminTab(btn, 'atab-faults');
-  document.getElementById('faultCodeSearch').value = code;
+  document.getElementById('faultSearch').value = code;
   renderAdminFaults();
 }
 
@@ -1624,22 +1687,32 @@ async function submitFullResolve() {
 }
 
 function updateBulkButtons() {
-  let container, btn;
+  let container, btn, ackBtn;
   if (currentPage === 'admin') {
     container = document.getElementById('adminFaultList');
     btn = document.getElementById('adminBulkAckBtn');
+    ackBtn = document.getElementById('adminBulkAckOnlyBtn');
   } else if (currentPage === 'overview') {
     container = document.getElementById('activeFaultsEl');
     btn = document.getElementById('overviewBulkAckBtn');
+    ackBtn = document.getElementById('overviewBulkAckOnlyBtn');
   } else if (currentMachine) {
     container = document.getElementById(`mt-faults-${currentMachine}`);
     btn = document.getElementById(`machineBulkAckBtn-${currentMachine}`);
+    ackBtn = document.getElementById(`machineBulkAckOnlyBtn-${currentMachine}`);
   }
 
   if (container && btn) {
-    const selected = container.querySelectorAll('.fault-select-cb:checked').length;
+    const selectedCbs = [...container.querySelectorAll('.fault-select-cb:checked')];
+    const selected = selectedCbs.length;
     btn.disabled = selected === 0;
     btn.textContent = `Close Selected${selected > 0 ? ' ('+selected+')' : ''}`;
+    
+    if (ackBtn) {
+      const openSelected = selectedCbs.filter(cb => cb.dataset.status === 'open').length;
+      ackBtn.disabled = openSelected === 0;
+      ackBtn.textContent = `Acknowledge Selected${openSelected > 0 ? ' ('+openSelected+')' : ''}`;
+    }
   }
 }
 
@@ -1683,6 +1756,35 @@ async function submitBulkAcknowledge() {
   if (res) {
     await Promise.all(ids.map(id => api('PATCH', `/faults/${id}/close`, { closed_by: user, notes: 'Fully closed via bulk action.' })));
     toast(`${ids.length} fault(s) closed.`, 'success'); closeModal('bulkAcknowledgeModal');
+  }
+}
+
+function bulkAcknowledgeOnly(pageId) {
+  let container;
+  if (pageId === 'overview') {
+    container = document.getElementById('activeFaultsEl');
+  } else {
+    container = pageId ? document.getElementById('mt-faults-' + pageId) : document.getElementById('adminFaultList');
+  }
+  if (!container) return;
+  const selectedCbs = [...container.querySelectorAll('.fault-select-cb:checked')].filter(cb => cb.dataset.status === 'open');
+  const selectedIds = selectedCbs.map(cb => parseInt(cb.value));
+  if (selectedIds.length === 0) { toast('No unacknowledged faults selected', 'info'); return; }
+  document.getElementById('bulkAckOnlyIds').value = JSON.stringify(selectedIds);
+  document.getElementById('bulkAckOnlyDesc').textContent = `You are about to acknowledge ${selectedIds.length} fault(s). Already acknowledged faults will be ignored. Please enter your name to confirm.`;
+  document.getElementById('bulkAckOnlyUser').value = '';
+  openModal('bulkAckOnlyModal');
+  setTimeout(() => document.getElementById('bulkAckOnlyUser').focus(), 100);
+}
+
+async function submitBulkAckOnly() {
+  const ids = JSON.parse(document.getElementById('bulkAckOnlyIds').value);
+  const user = document.getElementById('bulkAckOnlyUser').value.trim();
+  if (!user) { toast('Please enter your name', 'error'); return; }
+  const res = await api('POST', '/faults/bulk-acknowledge', { ids, resolved_by: user });
+  if (res) {
+    toast(`${res.acknowledged} fault(s) acknowledged.`, 'success'); 
+    closeModal('bulkAckOnlyModal');
   }
 }
 
@@ -2867,19 +2969,19 @@ async function saveSecuritySettings(){
 function renderAdminFaults(){
   if(!adminReport||!adminReport.faults)return;
   const search = document.getElementById('faultSearch').value.toLowerCase();
-  const codeSearch = document.getElementById('faultCodeSearch').value.toLowerCase();
   const machine = document.getElementById('faultFilterMachine').value;
   const category = document.getElementById('faultFilterCategory').value;
   const severity = document.getElementById('faultFilterSeverity').value;
   const unresolved = document.getElementById('faultFilterUnresolved').checked;
   const hideAck = document.getElementById('faultFilterHideAck') ? document.getElementById('faultFilterHideAck').checked : false;
   const sort = document.getElementById('faultSort').value;
-  const timeFilter = document.getElementById('faultFilterTime').value;
-  const sevenDaysAgo=new Date();sevenDaysAgo.setDate(sevenDaysAgo.getDate()-7);
-  const oneDayAgo=new Date();oneDayAgo.setDate(oneDayAgo.getDate()-1);
+
+  const resetBtn = document.getElementById('faultResetBtn');
+  if (resetBtn) {
+    resetBtn.disabled = !(search !== '' || machine !== '' || category !== '' || severity !== '' || sort !== 'desc' || !unresolved || hideAck);
+  }
+
   let filtered=adminReport.faults.filter(f=>{
-    if(timeFilter==='7days'&&new Date((f.created_at||'').replace(' ','T')+'Z')<sevenDaysAgo)return false;
-    if(timeFilter==='24h'&&new Date((f.created_at||'').replace(' ','T')+'Z')<oneDayAgo)return false;
     if(unresolved){
       const isBd = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
       const isOpenOrAck = f.status === 'open' || (f.status === 'resolved' && !isBd);
@@ -2892,14 +2994,12 @@ function renderAdminFaults(){
     if(machine&&f.machine_id!==machine)return false;
     if(category&&f.category!==category)return false;
     if(severity&&f.severity!==severity)return false;
-    if(codeSearch){
+    if(search){
+      let text=(f.description+' '+f.user_name+' '+(f.machine_name||f.machine_id)).toLowerCase();
       try {
         const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
-        if (!codes.some(c => c.toLowerCase().includes(codeSearch))) return false;
-      } catch(e) { return false; }
-    }
-    if(search){
-      const text=(f.description+' '+f.user_name+' '+(f.machine_name||f.machine_id)).toLowerCase();
+        if(codes.length) text += ' ' + codes.join(' ').toLowerCase();
+      } catch(e) {}
       if(!text.includes(search))return false;
     }
     return true;
@@ -3018,6 +3118,7 @@ document.addEventListener('keydown', e => {
       else if (openM.id === 'fullResolveModal') submitFullResolve();
       else if (openM.id === 'editFaultModal') submitEditFault();
       else if (openM.id === 'bulkAcknowledgeModal') submitBulkAcknowledge();
+      else if (openM.id === 'bulkAckOnlyModal') submitBulkAckOnly();
       else if (openM.id === 'resolveBreakdownModal') confirmBreakdownResolve();
       else if (openM.id === 'completeTaskModal') confirmTaskComplete();
       else if (openM.id === 'concessionModal') submitConcession();
