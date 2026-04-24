@@ -2,6 +2,8 @@
     -Updated - changes to some summary display/figures, new faults display on summary page
     -Added - Ability to resolve faults, filter on open only
     -Added 24h to time period option
+    -Added visual status display indicator
+    -Updated - Fault filters under admin
 -v1.32
     -Added IT to roles list
 -v1.31
