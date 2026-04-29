@@ -991,24 +991,24 @@ function handleWS(msg){
     return;
   }
   if(msg.type==='machine_added'){state.machines.push(msg.payload);buildAll();toast(`${msg.payload.name} added`,'success');if(currentPage==='admin')loadAdminData();return}
-  if(msg.type==='machine_updated'){const i=state.machines.findIndex(m=>m.id===msg.payload.id);if(i>=0)state.machines[i]=msg.payload;else state.machines.push(msg.payload);buildBanner();refreshOverview();if(currentMachine===msg.payload.id)refreshMachinePage(msg.payload.id);if(currentPage==='admin')loadAdminData();if(document.getElementById('cfgMachinesBody'))renderConfigMachines();toast(`${msg.payload.name} updated`,'info');return}
+  if(msg.type==='machine_updated'){const i=state.machines.findIndex(m=>m.id===msg.payload.id);if(i>=0)state.machines[i]=msg.payload;else state.machines.push(msg.payload);buildBanner();refreshOverview();refreshMachinePage(msg.payload.id);if(currentPage==='admin')loadAdminData();if(document.getElementById('cfgMachinesBody'))renderConfigMachines();toast(`${msg.payload.name} updated`,'info');return}
   if(msg.type==='machine_archived'){const i=state.machines.findIndex(m=>m.id===msg.payload.id);if(i>=0)state.machines[i].archived=1;buildAll();toast(`Machine archived`,'info');if(currentMachine===msg.payload.id)showPage('overview');if(currentPage==='admin')loadAdminData();return}
   if(msg.type==='machine_unarchived'){const i=state.machines.findIndex(m=>m.id===msg.payload.id);if(i>=0)state.machines[i].archived=0;buildAll();toast(`Machine unarchived`,'success');if(currentPage==='admin')loadAdminData();return}
   if(msg.type==='machine_deleted'){state.machines=state.machines.filter(m=>m.id!==msg.payload.id);buildAll();toast(`Machine deleted`,'info');if(currentMachine===msg.payload.id)showPage('overview');if(currentPage==='admin')loadAdminData();return}
   if(msg.type==='machines_reordered'){state.machines=msg.payload;buildAll();if(currentPage==='admin')loadAdminData();return}
-  if(msg.type==='activity_added'){state.activity.unshift(msg.payload);refreshOverview();if(currentMachine===msg.payload.machine_id)refreshMachinePage(msg.payload.machine_id);return}
-  if(msg.type==='fault_added'){state.faults.unshift(msg.payload);refreshOverview();if(currentMachine===msg.payload.machine_id)refreshMachinePage(msg.payload.machine_id);toast(`Fault reported on ${msg.payload.machine_name}`,'error');return}
-  if(msg.type==='fault_updated'){const fi=state.faults.findIndex(f=>f.id===msg.payload.id);if(fi>=0)state.faults[fi]=msg.payload;refreshOverview();if(currentMachine===msg.payload.machine_id)refreshMachinePage(msg.payload.machine_id)}
+  if(msg.type==='activity_added'){state.activity.unshift(msg.payload);refreshOverview();refreshMachinePage(msg.payload.machine_id);return}
+  if(msg.type==='fault_added'){state.faults.unshift(msg.payload);refreshOverview();refreshMachinePage(msg.payload.machine_id);toast(`Fault reported on ${msg.payload.machine_name}`,'error');return}
+  if(msg.type==='fault_updated'){const fi=state.faults.findIndex(f=>f.id===msg.payload.id);if(fi>=0)state.faults[fi]=msg.payload;refreshOverview();refreshMachinePage(msg.payload.machine_id)}
   if(msg.type==='fault_deleted'){
     state.faults=state.faults.filter(f=>f.id!==msg.payload.id);
     if(adminReport&&adminReport.faults)adminReport.faults=adminReport.faults.filter(f=>f.id!==msg.payload.id);
     refreshOverview();
-    if(currentMachine===msg.payload.machine_id)refreshMachinePage(msg.payload.machine_id);
+    refreshMachinePage(msg.payload.machine_id);
     if(currentPage==='admin')renderAdminFaults();
     return;
   }
-  if(msg.type==='concession_added'){state.concessions.push(msg.payload);refreshOverview();if(currentMachine===msg.payload.machine_id)refreshMachinePage(msg.payload.machine_id);return}
-  if(msg.type==='concession_updated'){const ci=state.concessions.findIndex(c=>c.id===msg.payload.id);if(ci>=0)state.concessions[ci]=msg.payload;refreshOverview();if(currentMachine===msg.payload.machine_id)refreshMachinePage(msg.payload.machine_id);return}
+  if(msg.type==='concession_added'){state.concessions.push(msg.payload);refreshOverview();refreshMachinePage(msg.payload.machine_id);return}
+  if(msg.type==='concession_updated'){const ci=state.concessions.findIndex(c=>c.id===msg.payload.id);if(ci>=0)state.concessions[ci]=msg.payload;refreshOverview();refreshMachinePage(msg.payload.machine_id);return}
   if(msg.type==='settings_updated'){state.settings=msg.payload;populateSettings();buildDropdowns();refreshOverview();if(currentPage==='admin')loadAdminData();toast('Settings updated','success');return}
 }
 
@@ -1746,7 +1746,7 @@ function openFaultFor(machineId, force = false, onComplete = null){
   document.getElementById('faultCodeInput').value = '';
   document.getElementById('faultScreenshot').checked = false;
   openModal('faultModal');
-  setTimeout(()=>document.getElementById('faultDesc').focus(),100);
+  setTimeout(()=>document.getElementById('faultUser').focus(),100);
   if(onComplete) onComplete();
   return true;
 }
