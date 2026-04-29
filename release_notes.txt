@@ -1,3 +1,8 @@
+-v1.34
+    -Updated - Direct access to active faults from overview page, added count
+    -Updated - Changes to colouring of faults/restrictions/concessions
+    -Updated - Numbering of faults (open/filtered) on machine page and overview page
+    -Uodated - change to line charts on downtime tab
 -v1.33
     -Updated - changes to some summary display/figures, new faults display on summary page
     -Added - Ability to resolve faults, filter on open only

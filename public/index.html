@@ -243,8 +243,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div id="page-overview" class="page active">
       <div class="page-title"><h1>Treatment Unit Status</h1><p>Live status &mdash; all radiotherapy machines</p></div>
       <div class="overview-grid" id="overviewGrid"></div>
-      <div class="card" style="margin-bottom:16px;padding-bottom:10px">
-        <div class="card-head">Active Faults</div>
+      <div class="card" id="overviewFaultsCard" style="margin-bottom:16px;padding-bottom:10px">
+        <div class="card-head" id="overviewActiveFaultsTitle">Active Faults</div>
         <div class="card-body" style="padding-top:12px">
           <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
             <input id="overviewFaultSearch" placeholder="Search descriptions, codes..." oninput="refreshOverview()" style="background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;width:180px">
@@ -781,7 +781,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="modal-head" style="justify-content:flex-end;margin-bottom:10px"><button class="modal-close" onclick="closeModal('aboutModal')">&#10005;</button></div>
     <div style="text-align:center;padding:0 0 20px">
       <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:300px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.33</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.34</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:20px">April 2026</p>
 
@@ -1215,7 +1215,7 @@ function refreshOverview(){
       <div class="mc-card-head"><div><div class="mc-card-name">${m.name}</div><div class="mc-card-model">${m.model}</div></div>
       <span class="badge ${show?meta.cls:'b-offline'}"><span class="badge-dot" style="background:${show?meta.dot:'#94a3b8'}"></span>${show?meta.label:'OFFLINE'}${bdHtml}</span></div>
       ${mConcessions.length?`<div class="alert alert-amber" style="margin-bottom:8px;font-size:11px;padding:6px 10px">&#9888; ${mConcessions.length} active concession/restriction${mConcessions.length>1?'s':''}</div>`:''}
-      ${newFaults.length?`<div class="alert ${newFaults.length > avgNewFaults ? 'alert-red' : 'alert-amber'}" style="margin-bottom:8px;font-size:11px;padding:6px 10px;cursor:pointer" onclick="goToMachineFaults('${m.id}'); event.stopPropagation();" title="Click to view active faults for ${m.name}">&#9888; ${newFaults.length} new fault${newFaults.length>1?'s':''}</div>`:''}
+      ${newFaults.length?`<div class="alert ${newFaults.length > avgNewFaults ? 'alert-red' : 'alert-amber'}" style="margin-bottom:8px;font-size:11px;padding:6px 10px;cursor:pointer" onclick="focusOverviewFaults('${m.id}'); event.stopPropagation();" title="Click to view active faults for ${m.name}">&#9888; ${newFaults.length} new fault${newFaults.length>1?'s':''}</div>`:''}
       <div class="mc-card-stats">
         <div class="mc-mini"><div class="mc-mini-val" style="color:${openFaults.length>0?'var(--text)':'var(--green)'}">${openFaults.length}</div><div class="mc-mini-lbl">Open faults</div></div>
         <div class="mc-mini"><div class="mc-mini-val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="mc-mini-lbl">30-day breakdowns</div></div>
@@ -1280,6 +1280,16 @@ function refreshOverview(){
   if (sort === 'asc') overviewFaults.reverse();
   document.getElementById('activeFaultsEl').innerHTML = overviewFaults.length ? overviewFaults.map(f => faultRowHTML(f, true)).join('') : '<div class="empty">No faults to display</div>';
   
+  const titleEl = document.getElementById('overviewActiveFaultsTitle');
+  if (titleEl) {
+    const openCount = state.faults.filter(f => {
+      const isBd = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
+      const isOpenOrAck = f.status === 'open' || (f.status === 'resolved' && !isBd);
+      return isOpenOrAck && (machineF ? f.machine_id === machineF : activeMachineIds.has(f.machine_id));
+    }).length;
+    titleEl.textContent = `Active Faults (${openCount})`;
+  }
+
   const buttonContainer = document.getElementById('overview-fault-buttons');
   if (buttonContainer) {
     const ackableFaults = overviewFaults.filter(f => {
@@ -1362,7 +1372,8 @@ function refreshMachinePage(machineId){
   const concessionsHtml=mConcessions.map(c=>{
     const isOverdue=c.review_by&&(new Date(c.review_by)<new Date(new Date().toDateString()));
     const revHtml=c.review_by?`<span style="margin-left:8px;font-size:11px;opacity:0.9;${isOverdue?'color:var(--red);font-weight:bold;':''}"><span style="margin-right:3px">&#8987;</span>Review by ${fmtD(c.review_by)}${isOverdue?' (OVERDUE)':''}</span>`:'';
-    return `<div class="alert alert-amber" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;margin-bottom:8px;box-shadow:var(--shadow-sm)">
+    const alertClass = c.type === 'Restriction' ? 'alert-red' : 'alert-amber';
+    return `<div class="alert ${alertClass}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 14px;margin-bottom:8px;box-shadow:var(--shadow-sm)">
       <div><strong style="text-transform:uppercase">${c.type}:</strong> ${c.description} <span style="opacity:0.7;font-weight:normal;margin-left:4px">(${c.user_name})</span>${revHtml}</div>
       <div style="flex-shrink:0"><button class="btn btn-sm" style="background:transparent;border-color:currentColor;color:inherit;padding:2px 8px;margin-right:4px" onclick="editConcession(${c.id})">Edit</button><button class="btn btn-sm" style="background:transparent;border-color:currentColor;color:inherit;padding:2px 8px" onclick="removeConcession(${c.id})">Remove</button></div>
     </div>`}).join('');
@@ -1404,7 +1415,7 @@ function refreshMachinePage(machineId){
     </div>
     <div class="tabs">
       <button class="tab active" onclick="switchMTab(this,'mt-log-${machineId}')">Activity Log</button>
-      <button class="tab" onclick="switchMTab(this,'mt-faults-${machineId}')">Faults (${dispFaults.length})</button>
+      <button class="tab" onclick="switchMTab(this,'mt-faults-${machineId}')">Faults (${openFaults.length})</button>
       <button class="tab" onclick="switchMTab(this,'mt-breakdowns-${machineId}')">Breakdowns (${dispBreakdowns.length})</button>
       <button class="tab" onclick="switchMTab(this,'mt-info-${machineId}')">Machine Info</button>
     </div>
@@ -1538,6 +1549,21 @@ function goToMachineFaults(machineId) {
     const faultPane = document.getElementById(`mt-faults-${machineId}`);
     if (faultPane) faultPane.scrollIntoView({behavior: 'smooth', block: 'start'});
   }, 50);
+}
+
+function focusOverviewFaults(machineId) {
+  const mSel = document.getElementById('overviewFilterMachine');
+  if (mSel) mSel.value = machineId;
+  const openCb = document.getElementById('overviewOpenOnly');
+  if (openCb) openCb.checked = true;
+  
+  if (document.getElementById('overviewFilterCategory')) document.getElementById('overviewFilterCategory').value = '';
+  if (document.getElementById('overviewFilterSeverity')) document.getElementById('overviewFilterSeverity').value = '';
+  if (document.getElementById('overviewFaultSearch')) document.getElementById('overviewFaultSearch').value = '';
+  
+  refreshOverview();
+  const target = document.getElementById('overviewFaultsCard');
+  if (target) target.scrollIntoView({behavior: 'smooth', block: 'start'});
 }
 
 function resetAdminFaultFilters() {
@@ -2337,10 +2363,16 @@ function renderDtTable() {
     return dtSortAsc ? valA - valB : valB - valA;
   });
   const maxDt = Math.max(1, ...arr.map(s => s.downtime_hrs));
+  const maxFlt = Math.max(1, ...arr.map(s => s.fault_count));
+  const maxBd = Math.max(1, ...arr.map(s => s.breakdown_count));
+  const maxLong = Math.max(1, ...arr.map(s => s.long_faults));
   const tbody = document.getElementById('dtTbody');
   if (tbody) tbody.innerHTML = arr.map(s => {
     const pct = (s.downtime_hrs / maxDt) * 100;
     const col = s.downtime_hrs > 10 ? 'var(--red)' : s.downtime_hrs > 5 ? 'var(--amber)' : 'var(--green)';
+    const pctFlt = (s.fault_count / maxFlt) * 100;
+    const pctBd = (s.breakdown_count / maxBd) * 100;
+    const pctLong = (s.long_faults / maxLong) * 100;
       const breakdowns = adminReport.faults.filter(f => f.machine_id === s.machine.id && ((f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) || f.downtime_hrs > 0));
     breakdowns.sort((a,b) => {
       let valA = a[bdSortCol], valB = b[bdSortCol];
@@ -2351,7 +2383,7 @@ function renderDtTable() {
     let detailsHtml = '';
     if (breakdowns.length > 0) {
       detailsHtml = `<tr id="dt-details-${s.machine.id}" style="display:${dtExpanded.has(s.machine.id) ? 'table-row' : 'none'};background:var(--surface2)">
-        <td colspan="6" style="padding:12px 16px;border-bottom:1px solid var(--border)">
+        <td colspan="5" style="padding:12px 16px;border-bottom:1px solid var(--border)">
           <div style="font-weight:600;margin-bottom:8px">Breakdown Details</div>
           <table class="tbl" style="margin:0;background:var(--surface)">
             <thead><tr><th style="cursor:pointer;user-select:none" onclick="sortBd('created_at')" title="Sort">Date &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortBd('category')" title="Sort">Category &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortBd('description')" title="Sort">Description &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortBd('user_name')" title="Sort">Reported By &#8597;</th><th style="cursor:pointer;user-select:none;text-align:right" onclick="sortBd('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th></tr></thead>
@@ -2368,7 +2400,7 @@ function renderDtTable() {
         </td>
       </tr>`;
     }
-    return `<tr style="cursor:pointer" onclick="toggleDtDetails('${s.machine.id}')" title="Click to view breakdown details"><td style="font-weight:600;font-family:var(--mono);font-size:12px">${s.machine.name}</td><td style="color:var(--text3)">${s.machine.model}</td><td style="min-width:180px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:4px;transition:width 0.4s ease"></div></div><span style="font-family:var(--mono);color:${col};font-weight:500;min-width:45px;text-align:right">${s.downtime_hrs.toFixed(2)}h</span></div></td><td>${s.fault_count}</td><td>${s.breakdown_count}</td><td>${s.long_faults}</td></tr>${detailsHtml}`;
+    return `<tr style="cursor:pointer" onclick="toggleDtDetails('${s.machine.id}')" title="Click to view breakdown details"><td style="font-weight:600;font-family:var(--mono);font-size:12px">${s.machine.name}</td><td style="min-width:180px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${col};border-radius:4px;transition:width 0.4s ease"></div></div><span style="font-family:var(--mono);color:${col};font-weight:500;min-width:45px;text-align:right">${s.downtime_hrs.toFixed(2)}h</span></div></td><td style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${pctFlt}%;height:100%;background:var(--blue);border-radius:4px;transition:width 0.4s ease"></div></div><span style="font-family:var(--mono);color:var(--text);font-weight:500;min-width:30px;text-align:right">${s.fault_count}</span></div></td><td style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${pctBd}%;height:100%;background:var(--amber);border-radius:4px;transition:width 0.4s ease"></div></div><span style="font-family:var(--mono);color:var(--text);font-weight:500;min-width:30px;text-align:right">${s.breakdown_count}</span></div></td><td style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${pctLong}%;height:100%;background:var(--red);border-radius:4px;transition:width 0.4s ease"></div></div><span style="font-family:var(--mono);color:var(--text);font-weight:500;min-width:30px;text-align:right">${s.long_faults}</span></div></td></tr>${detailsHtml}`;
   }).join('');
 }
 
@@ -2860,7 +2892,7 @@ async function loadAdminData(){
 
   adminReport.last12Months = sortedMonths;
   adminReport.faultsByMonth = faultsByMonth;
-  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('model')" title="Sort">Model &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">Days &gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
+  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">Days &gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
   renderInteractiveGraphs();
   renderCategoryCharts();
   renderDtTable();
