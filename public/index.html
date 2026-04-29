@@ -894,6 +894,19 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
   </div>
 </div>
 
+<!-- STATION WARNING MODAL -->
+<div class="modal-overlay" id="stationWarningModal">
+  <div class="modal" style="max-width:400px; border:2px solid var(--amber)">
+    <div class="modal-head"><h2 style="color:var(--amber)">&#9888; Station Warning</h2><button class="modal-close" onclick="closeModal('stationWarningModal')">&#10005;</button></div>
+    <p style="font-size:13px;color:var(--text);margin-bottom:12px">You are interacting with a machine (<strong id="stationWarningTarget" style="font-family:var(--mono)"></strong>) that is NOT your set station (<strong id="stationWarningDefault" style="font-family:var(--mono)"></strong>).</p>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Please ensure you are avoiding adding entries incorrectly.</p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn" onclick="closeModal('stationWarningModal')">Cancel</button>
+      <button class="btn btn-primary" style="background:var(--amber);border-color:var(--amber);color:#fff" id="stationWarningProceedBtn">Proceed anyway</button>
+    </div>
+  </div>
+</div>
+
 <!-- SET STATION MODAL -->
 <div class="modal-overlay" id="stationModal">
   <div class="modal" style="max-width:400px">
@@ -1470,7 +1483,7 @@ function faultRowHTML(f,showMachine){
   const sevColor=isBreakdown?'var(--red)':f.severity.includes('Medium')?'var(--amber)':'var(--blue)';
   const checkbox = (!isClosed && !isBreakdown) ? `<input type="checkbox" class="fault-select-cb" value="${f.id}" data-status="${f.status}" style="margin-right:8px;transform:scale(1.2);flex-shrink:0" onchange="updateBulkButtons()">` : `<div style="width:25px;flex-shrink:0"></div>`;
   const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
-  const canFilter = currentPage === 'admin' || currentPage === 'overview';
+  const canFilter = true;
   const codesHtml = codes.length > 0 ? codes.map(c => `<span class="tag" style="background:var(--blue-bg);color:var(--blue);margin-right:4px${canFilter ? ';cursor:pointer' : ''}" ${canFilter ? `onclick="filterByCode('${c}'); event.stopPropagation();" title="Click to filter by this code"` : ''}>${c}</span>`).join('') : '';
   const screenshotHtml = f.screenshot_taken ? `<span class="tag" style="background:var(--green-bg);color:var(--green);">&#128247; Screenshot</span>` : '';
   
@@ -1521,8 +1534,9 @@ function quickFilterFaults(field, value) {
   }
 }
 
-function goToMachineFaults(machineId) {
-  showMachine(machineId);
+function goToMachineFaults(machineId, force = false) {
+  if(!force && !checkStationWarning(machineId, () => goToMachineFaults(machineId, true))) return;
+  showMachine(machineId, true);
   const pageEl = document.getElementById('page-' + machineId);
   if (!pageEl) return;
   
@@ -1602,6 +1616,19 @@ function filterByCode(code) {
   }
 }
 
+function checkStationWarning(targetMachineId, onConfirm) {
+  const defaultMachine = localStorage.getItem('defaultMachine');
+  if (defaultMachine && defaultMachine !== targetMachineId) {
+    document.getElementById('stationWarningTarget').textContent = targetMachineId;
+    document.getElementById('stationWarningDefault').textContent = defaultMachine;
+    const btn = document.getElementById('stationWarningProceedBtn');
+    btn.onclick = () => { closeModal('stationWarningModal'); if (onConfirm) onConfirm(); };
+    openModal('stationWarningModal');
+    return false;
+  }
+  return true;
+}
+
 function showPage(name){
   if(name === 'admin' && state.settings?.admin_pwd_enabled === '1' && !adminAuthenticated){
     document.getElementById('adminAuthPwd').value = '';
@@ -1632,13 +1659,15 @@ function verifyAdminPwd() {
   }
 }
 
-function showMachine(machineId){
+function showMachine(machineId, force = false){
+  if(!force && !checkStationWarning(machineId, () => showMachine(machineId, true))) return false;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+machineId)?.classList.add('active');
   ['navOverview','navAdmin'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
   currentMachine=machineId;currentPage=machineId;buildBanner();updateBulkButtons();
   const mainEl = document.querySelector('.main');
   if(mainEl) mainEl.scrollTop = 0;
+  return true;
 }
 function switchAdminTab(btn,tabId){
   btn.closest('.tabs').querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
@@ -1670,7 +1699,8 @@ function confirmPower(){
   closeModal('powerModal');pendingPower=null;
 }
 
-function requestStatusChange(machineId,newStatus){
+function requestStatusChange(machineId,newStatus,force=false){
+  if(!force && !checkStationWarning(machineId, () => requestStatusChange(machineId,newStatus,true))) return;
   const m=state.machines.find(x=>x.id===machineId);if(m.status===newStatus)return;
   if(m.status==='breakdown'){toast('Machine is in breakdown. Please resolve it first.','error');return;}
   if(!m.power && !['breakdown','service','maintenance','offline'].includes(newStatus)){
@@ -1678,9 +1708,10 @@ function requestStatusChange(machineId,newStatus){
     return;
   }
   if(newStatus === 'breakdown') {
-    openFaultFor(machineId);
-    document.getElementById('faultStatusChange').value = 'breakdown';
-    document.getElementById('faultSeverity').value = 'High';
+    openFaultFor(machineId, false, () => {
+      document.getElementById('faultStatusChange').value = 'breakdown';
+      document.getElementById('faultSeverity').value = 'High';
+    });
     return;
   }
   pendingStatus={machineId,newStatus};
@@ -1696,14 +1727,16 @@ function confirmStatusChange(){
   closeModal('statusConfirmModal');pendingStatus=null;
 }
 
-function openLogFor(machineId){
+function openLogFor(machineId, force = false){
+  if(!force && !checkStationWarning(machineId, () => openLogFor(machineId, true))) return;
   document.getElementById('logMachine').value=machineId;
   document.getElementById('logActivity').value=state.settings?.default_activity_category||'Treatment session';
   document.getElementById('logNotes').value='';
   openModal('logModal');
   setTimeout(()=>document.getElementById('logNotes').focus(),100);
 }
-function openFaultFor(machineId){
+function openFaultFor(machineId, force = false, onComplete = null){
+  if(!force && !checkStationWarning(machineId, () => openFaultFor(machineId, true, onComplete))) return false;
   document.getElementById('faultMachine').value=machineId;
   document.getElementById('faultCategory').value=state.settings?.default_fault_category||'Other';
   document.getElementById('faultSeverity').value=state.settings?.default_fault_severity||'Low';
@@ -1714,6 +1747,8 @@ function openFaultFor(machineId){
   document.getElementById('faultScreenshot').checked = false;
   openModal('faultModal');
   setTimeout(()=>document.getElementById('faultDesc').focus(),100);
+  if(onComplete) onComplete();
+  return true;
 }
 
 function addFaultCode() {
@@ -1999,7 +2034,8 @@ async function submitEditFault() {
   }
 }
 
-function openConcessionFor(machineId){
+function openConcessionFor(machineId, force = false){
+  if(!force && !checkStationWarning(machineId, () => openConcessionFor(machineId, true))) return;
   document.getElementById('concessionModalTitle').textContent='Add Concession / Restriction';
   document.getElementById('concessionId').value='';
   document.getElementById('concessionMachine').value=machineId;
@@ -2008,9 +2044,10 @@ function openConcessionFor(machineId){
   document.getElementById('concessionReviewBy').value='';
   openModal('concessionModal');setTimeout(()=>document.getElementById('concessionDesc').focus(),100);
 }
-function editConcession(id){
+function editConcession(id, force = false){
   const c = state.concessions.find(x => x.id === id);
   if(!c) return;
+  if(!force && !checkStationWarning(c.machine_id, () => editConcession(id, true))) return;
   document.getElementById('concessionModalTitle').textContent='Edit Concession / Restriction';
   document.getElementById('concessionId').value=id;
   document.getElementById('concessionMachine').value=c.machine_id;
@@ -2028,7 +2065,10 @@ async function submitConcession(){
   else { await api('POST','/concessions',body); toast('Concession added','success'); }
   closeModal('concessionModal');
 }
-function removeConcession(id){
+function removeConcession(id, force = false){
+  const c = state.concessions.find(x => x.id === id);
+  if(!c) return;
+  if(!force && !checkStationWarning(c.machine_id, () => removeConcession(id, true))) return;
   document.getElementById('removeConcessionId').value=id;
   document.getElementById('removeConcessionUser').value='';
   openModal('removeConcessionModal');
@@ -3266,6 +3306,7 @@ document.addEventListener('keydown', e => {
       else if (openM.id === 'deleteAuditModal') executeDeleteAudit();
       else if (openM.id === 'editAuditModal') submitEditAudit();
       else if (openM.id === 'backupOverwriteModal') confirmServerBackupOverwrite();
+      else if (openM.id === 'stationWarningModal') document.getElementById('stationWarningProceedBtn').click();
       else if (openM.id === 'stationModal') saveDefaultStation();
       else if (openM.id === 'restoreModal') confirmRestore();
       else if (openM.id === 'aboutModal') closeModal('aboutModal');
