@@ -1369,6 +1369,7 @@ function refreshMachinePage(machineId){
   if(show30Faults) {
     dispFaults = dispFaults.filter(f => new Date((f.created_at||'').replace(' ','T')+'Z') >= thirtyDaysAgo);
   }
+
   let dispBreakdowns = mBreakdowns;
   if(show30Breakdowns) {
     dispBreakdowns = dispBreakdowns.filter(f => new Date((f.created_at||'').replace(' ','T')+'Z') >= thirtyDaysAgo);
@@ -1381,6 +1382,29 @@ function refreshMachinePage(machineId){
   const potentialHrs=getTotalWorkingHours(30);
   const bdCount=recentFaults.filter(f=>(f.severity&&(f.severity.includes('High')||f.severity.includes('Critical')))||getFaultDowntime(f)>0).length;
   const upPct=Math.max(0,Math.min(100,100-(recentDt/potentialHrs*100))).toFixed(0);
+
+  let breakdownSubText = 'Last 30 days';
+  let breakdownSubColor = 'var(--text3)';
+  if (mBreakdowns.length > 0) {
+    const lastBdd = new Date((mBreakdowns[0].created_at||'').replace(' ','T')+'Z');
+    const daysSince = Math.floor((new Date() - lastBdd) / (1000 * 60 * 60 * 24));
+    if (mBreakdowns.length > 1) {
+      const sortedBreakdowns = [...mBreakdowns].sort((a, b) => new Date((a.created_at||'').replace(' ','T')+'Z') - new Date((b.created_at||'').replace(' ','T')+'Z'));
+      let totalDaysDiff = 0;
+      for (let i = 1; i < sortedBreakdowns.length; i++) {
+          const date1 = new Date((sortedBreakdowns[i-1].created_at||'').replace(' ','T')+'Z');
+          const date2 = new Date((sortedBreakdowns[i].created_at||'').replace(' ','T')+'Z');
+          totalDaysDiff += (Math.abs(date2 - date1) / (1000 * 60 * 60 * 24));
+      }
+      const avgDaysBetween = Math.round(totalDaysDiff / (sortedBreakdowns.length - 1));
+      breakdownSubText = `${daysSince} days since last (Avg. ${avgDaysBetween} days)`;
+      if (daysSince > avgDaysBetween) breakdownSubColor = 'var(--amber)';
+    } else {
+      breakdownSubText = `${daysSince} days since last`;
+    }
+  } else {
+    breakdownSubText = 'No breakdowns ever';
+  }
   const statusBtns=STATUS_OPTS.map(o=>{const dis=m.status==='breakdown'||(!m.power&&['treatment','qa'].includes(o.id));return`<button class="stat-btn ${o.id===m.status?'current':''}" data-s="${o.id}" ${dis?'disabled style="opacity:0.5;cursor:not-allowed"':''} onclick="requestStatusChange('${machineId}','${o.id}')">${o.label}</button>`}).join('');
   const concessionsHtml=mConcessions.map(c=>{
     const isOverdue=c.review_by&&(new Date(c.review_by)<new Date(new Date().toDateString()));
@@ -1422,9 +1446,9 @@ function refreshMachinePage(machineId){
     ${mConcessions.length ? `<div class="section-hd" style="margin-top:8px;margin-bottom:8px"><span>Active Concessions & Restrictions</span></div>${concessionsHtml}` : ''}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px">
       <div class="stat-card"><div class="lbl">Est. Uptime</div><div class="val" style="color:${upPct>90?'var(--green)':upPct>75?'var(--amber)':'var(--red)'}">${upPct}%</div><div class="sub">30-day estimate</div></div>
-      <div class="stat-card"><div class="lbl">Downtime</div><div class="val" style="color:var(--amber)">${recentDt.toFixed(2)}h</div><div class="sub">Machine breakdown</div></div>
-      <div class="stat-card"><div class="lbl">Open Faults</div><div class="val" style="color:${openFaults.length?'var(--red)':'var(--green)'}">${openFaults.length}</div><div class="sub">${recentFaults.length} in last 30 days</div></div>
-      <div class="stat-card"><div class="lbl">Breakdowns</div><div class="val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="sub">Last 30 days</div></div>
+      <div class="stat-card"><div class="lbl">Downtime</div><div class="val" style="color:var(--amber)">${recentDt.toFixed(2)}h</div><div class="sub">Last 30 days Breakdown</div></div>
+      <div class="stat-card"><div class="lbl">Open Faults</div><div class="val" style="color:${openFaults.length?'var(--red)':'var(--green)'}">${openFaults.length}</div><div class="sub">${recentFaults.length} faults in last 30 days</div></div>
+      <div class="stat-card"><div class="lbl">Breakdowns</div><div class="val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="sub" style="color:${breakdownSubColor}">${breakdownSubText}</div></div>
     </div>
     <div class="tabs">
       <button class="tab active" onclick="switchMTab(this,'mt-log-${machineId}')">Activity Log</button>
@@ -1483,7 +1507,7 @@ function faultRowHTML(f,showMachine){
   const sevColor=isBreakdown?'var(--red)':f.severity.includes('Medium')?'var(--amber)':'var(--blue)';
   const checkbox = (!isClosed && !isBreakdown) ? `<input type="checkbox" class="fault-select-cb" value="${f.id}" data-status="${f.status}" style="margin-right:8px;transform:scale(1.2);flex-shrink:0" onchange="updateBulkButtons()">` : `<div style="width:25px;flex-shrink:0"></div>`;
   const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
-  const canFilter = true;
+  const canFilter = showMachine;
   const codesHtml = codes.length > 0 ? codes.map(c => `<span class="tag" style="background:var(--blue-bg);color:var(--blue);margin-right:4px${canFilter ? ';cursor:pointer' : ''}" ${canFilter ? `onclick="filterByCode('${c}'); event.stopPropagation();" title="Click to filter by this code"` : ''}>${c}</span>`).join('') : '';
   const screenshotHtml = f.screenshot_taken ? `<span class="tag" style="background:var(--green-bg);color:var(--green);">&#128247; Screenshot</span>` : '';
   
@@ -1525,7 +1549,7 @@ function quickFilterFaults(field, value) {
     refreshOverview();
     document.getElementById('activeFaultsEl').scrollIntoView({behavior: 'smooth', block: 'start'});
   } else {
-    showPage('admin');
+        if (currentPage !== 'admin') showPage('admin');
     const btn = document.querySelector('#page-admin .tabs .tab');
     if (btn) switchAdminTab(btn, 'atab-faults');
     const el = document.getElementById(field);
@@ -1608,7 +1632,7 @@ function filterByCode(code) {
     refreshOverview();
     document.getElementById('activeFaultsEl').scrollIntoView({behavior: 'smooth', block: 'start'});
   } else {
-    showPage('admin');
+        if (currentPage !== 'admin') showPage('admin');
     const btn = document.querySelector('#page-admin .tabs .tab');
     if (btn) switchAdminTab(btn, 'atab-faults');
     document.getElementById('faultSearch').value = code;
@@ -2745,6 +2769,53 @@ function makeDonutChart(data) {
   return `<div style="display:flex;align-items:center;justify-content:center;gap:60px;width:100%;max-width:800px;margin:0 auto;flex-wrap:wrap"><div style="flex:1;min-width:200px;display:flex;justify-content:center">${svg}</div><div style="flex:1.5;min-width:220px;max-height:280px;overflow-y:auto;padding-right:12px">${legend}</div></div>`;
 }
 
+function renderTimeAnalysisCharts() {
+  if (!adminReport || !adminReport.faults) return '';
+  const faults = adminReport.faults;
+  
+  const hours = new Array(24).fill(0);
+  const days = new Array(7).fill(0);
+  
+  faults.forEach(f => {
+    if (!f.created_at) return;
+    const d = new Date(f.created_at.includes('T') || f.created_at.includes('Z') ? f.created_at : f.created_at.replace(' ', 'T') + 'Z');
+    if (isNaN(d.getTime())) return;
+    
+    hours[d.getHours()]++;
+    let dayIdx = d.getDay() - 1;
+    if (dayIdx < 0) dayIdx = 6;
+    days[dayIdx]++;
+  });
+  
+  const hourLabels = Array.from({length: 24}, (_, i) => `${i}`);
+  const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  
+  const htmlHours = makeSimpleBarChart(hours, hourLabels, 'var(--blue)', 'Hour of Day');
+  const htmlDays = makeSimpleBarChart(days, dayLabels, 'var(--purple)', 'Day of Week');
+  
+  return `<div id="timeAnalysisCharts" style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+            <div class="card" style="flex:1;min-width:300px"><div class="card-head">Faults by Time of Day</div><div class="card-body" style="padding-top:16px">${htmlHours}</div></div>
+            <div class="card" style="flex:1;min-width:300px"><div class="card-head">Faults by Day of Week</div><div class="card-body" style="padding-top:16px">${htmlDays}</div></div>
+          </div>`;
+}
+
+function makeSimpleBarChart(dataArr, labels, color, xAxisLabel) {
+  let maxVal = Math.max(...dataArr, 5);
+  const W = 400, H = 180, pL = 30, pR = 15, pT = 20, pB = 40;
+  const w = W - pL - pR, h = H - pT - pB;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:220px;font-family:var(--sans);font-size:10px;display:block;overflow:visible">`;
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i++) { const v = maxVal * (i / ticks); const y = pT + h - (v / maxVal) * h; svg += `<line x1="${pL}" y1="${y}" x2="${pL+w}" y2="${y}" stroke="var(--border)" stroke-dasharray="3" /><text x="${pL-6}" y="${y+3}" text-anchor="end" fill="var(--text3)">${v.toFixed(0)}</text>`; }
+  const barTotalW = w / dataArr.length, barW = barTotalW * 0.7;
+  dataArr.forEach((val, i) => {
+    const x = pL + (i * barTotalW) + (barTotalW - barW)/2, barH = (val / maxVal) * h, y = pT + h - barH;
+    if (val > 0) { svg += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${color}" rx="2" ry="2"><title>${labels[i]}: ${val} faults</title></rect><text x="${x + barW/2}" y="${y - 4}" text-anchor="middle" fill="var(--text2)" font-size="9">${val}</text>`; }
+    if (dataArr.length <= 7 || i % 2 === 0) { svg += `<text x="${x + barW/2}" y="${H - 20}" text-anchor="middle" fill="var(--text3)">${labels[i]}</text>`; }
+  });
+  svg += `<text x="${pL + w/2}" y="${H - 2}" text-anchor="middle" fill="var(--text2)" font-weight="500">${xAxisLabel}</text></svg>`;
+  return svg;
+}
+
 let adminReport=null;
 async function loadAdminData(){
   const days=document.getElementById('reportDays').value;
@@ -2824,11 +2895,7 @@ async function loadAdminData(){
   });
   const totalDt=summary.reduce((s,m)=>s+m.downtime_hrs,0);
   const totalFaults=summary.reduce((s,m)=>s+m.fault_count,0);
-  const openFaults = state.faults.filter(f => {
-      if (!activeMachineIds.has(f.machine_id)) return false;
-      const isBreakdown = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
-      return f.status === 'open' || (f.status === 'resolved' && !isBreakdown);
-  }).length;
+  const openFaults = summary.reduce((s, m) => s + m.open_faults, 0);
   document.getElementById('adminMetrics').innerHTML=`
     <div class="metric-card"><div class="lbl">Activity Entries</div><div class="val">${activity.length}</div><div class="sub">in period</div></div>
     <div class="metric-card"><div class="lbl">Faults Reported</div><div class="val" style="color:var(--red)">${totalFaults}</div><div class="sub">${openFaults} open</div></div>
@@ -2932,7 +2999,8 @@ async function loadAdminData(){
 
   adminReport.last12Months = sortedMonths;
   adminReport.faultsByMonth = faultsByMonth;
-  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">Days &gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
+  const timeChartsHtml = renderTimeAnalysisCharts();
+  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">Days &gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + timeChartsHtml + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
   renderInteractiveGraphs();
   renderCategoryCharts();
   renderDtTable();
