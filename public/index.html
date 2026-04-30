@@ -1547,7 +1547,7 @@ function quickFilterFaults(field, value) {
     const el = document.getElementById(mappedField);
     if (el) el.value = value;
     refreshOverview();
-    document.getElementById('activeFaultsEl').scrollIntoView({behavior: 'smooth', block: 'start'});
+    document.getElementById('overviewFaultsCard').scrollIntoView({behavior: 'smooth', block: 'start'});
   } else {
         if (currentPage !== 'admin') showPage('admin');
     const btn = document.querySelector('#page-admin .tabs .tab');
@@ -1555,6 +1555,7 @@ function quickFilterFaults(field, value) {
     const el = document.getElementById(field);
     if (el) el.value = value;
     renderAdminFaults();
+    document.getElementById('atab-faults').scrollIntoView({behavior: 'smooth', block: 'start'});
   }
 }
 
@@ -1630,13 +1631,14 @@ function filterByCode(code) {
   if (currentPage === 'overview') {
     document.getElementById('overviewFaultSearch').value = code;
     refreshOverview();
-    document.getElementById('activeFaultsEl').scrollIntoView({behavior: 'smooth', block: 'start'});
+    document.getElementById('overviewFaultsCard').scrollIntoView({behavior: 'smooth', block: 'start'});
   } else {
         if (currentPage !== 'admin') showPage('admin');
     const btn = document.querySelector('#page-admin .tabs .tab');
     if (btn) switchAdminTab(btn, 'atab-faults');
     document.getElementById('faultSearch').value = code;
     renderAdminFaults();
+    document.getElementById('atab-faults').scrollIntoView({behavior: 'smooth', block: 'start'});
   }
 }
 
