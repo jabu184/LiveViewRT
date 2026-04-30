@@ -3,18 +3,21 @@
     -Updated - Changes to colouring of faults/restrictions/concessions
     -Updated - Numbering of faults (open/filtered) on machine page and overview page
     -Updated - change to line charts on downtime tab
-    -Added - Machine lock
+    -Added - Machine lock based on set station
+    -Added - Additional breakdown charts, time of day etc.
+    -Updated - Main page statistics
+    -Fixed - WebSocket display bug on main equipment page
 -v1.33
     -Updated - changes to some summary display/figures, new faults display on summary page
     -Added - Ability to resolve faults, filter on open only
-    -Added 24h to time period option
-    -Added visual status display indicator
+    -Added - 24h to time period option
+    -Added - visual status display indicator
     -Updated - Fault filters under admin
 -v1.32
-    -Added IT to roles list
+    -Added - IT to roles list
 -v1.31
-    -Added ability to upload new firmware
-    -Fixed days >2h bug
+    -Added - Ability to upload new firmware
+    -Fixed - Days >2h bug
 -v1.3
     -Fix - Utilisation data includes offline time and calculate within core clinical hours only
     -Fix - Utilisation charts correctly display clinical utilisation percentages
