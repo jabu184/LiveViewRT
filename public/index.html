@@ -781,7 +781,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="modal-head" style="justify-content:flex-end;margin-bottom:10px"><button class="modal-close" onclick="closeModal('aboutModal')">&#10005;</button></div>
     <div style="text-align:center;padding:0 0 20px">
       <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:300px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.34</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.35</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:20px">April 2026</p>
 
@@ -1204,11 +1204,46 @@ async function moveSettingItem(key, index, direction) {
   await api('PATCH', '/settings', { [key]: JSON.stringify(arr) });
 }
 
+function groupFaults(faults) {
+  const groups = {};
+  const result = [];
+  for (const f of faults) {
+    const baseDesc = f.description.replace(/\[RECURRENCE\]\s*/g, '').trim();
+    const isBreakdown = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
+    const isClosed = f.status === 'closed' || (f.status === 'resolved' && isBreakdown);
+    const key = f.machine_id + '|' + f.category + '|' + baseDesc + '|' + isClosed;
+    if (!groups[key]) {
+      const copy = { ...f, recurrenceCount: 1, unackCount: f.status === 'open' ? 1 : 0, groupedIds: [f.id] };
+      groups[key] = copy;
+      result.push(copy);
+    } else {
+      groups[key].recurrenceCount++;
+      if (f.status === 'open') groups[key].unackCount++;
+      groups[key].groupedIds.push(f.id);
+      if (f.status === 'open' && groups[key].status !== 'open') {
+         groups[key].status = 'open';
+      }
+      if (Number(f.id) > Number(groups[key].id)) {
+         groups[key].id = f.id;
+         groups[key].description = f.description;
+         groups[key].created_at = f.created_at;
+         groups[key].user_name = f.user_name;
+         groups[key].user_role = f.user_role;
+         groups[key].fault_codes = f.fault_codes;
+         groups[key].screenshot_taken = f.screenshot_taken;
+      }
+    }
+  }
+  return result;
+}
+
 function refreshOverview(){
   const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const activeMachines = state.machines.filter(m=>!m.archived);
   const activeMachineIds = new Set(activeMachines.map(m => m.id));
-  const totalNewFaults = state.faults.filter(f => f.status === 'open' && activeMachineIds.has(f.machine_id)).length;
+  
+  const groupedAllFaults = groupFaults(state.faults);
+  const totalNewFaults = groupedAllFaults.filter(f => f.status === 'open' && activeMachineIds.has(f.machine_id)).reduce((sum, f) => sum + (f.unackCount !== undefined ? f.unackCount : 1), 0);
   const avgNewFaults = activeMachines.length > 0 ? totalNewFaults / activeMachines.length : 0;
 
   document.getElementById('overviewGrid').innerHTML=activeMachines.map(m=>{
@@ -1216,8 +1251,10 @@ function refreshOverview(){
     const show=m.power||['breakdown','service','maintenance','offline'].includes(m.status);
     const bdStart=getBdTime(m);
     const bdHtml=(bdStart&&bdStart!=='loading')?`<span class="bd-timer" data-start="${bdStart}" style="margin-left:4px;font-family:var(--mono)"></span>`:'';
-    const openFaults=state.faults.filter(f=>f.machine_id===m.id&&(f.status==='open'||(f.status==='resolved'&&!(f.severity&&f.severity.includes('High')||f.severity&&f.severity.includes('Critical')))));
-    const newFaults=state.faults.filter(f=>f.machine_id===m.id&&f.status==='open');
+    const groupedMFaults = groupedAllFaults.filter(f => f.machine_id === m.id);
+    const openFaults=groupedMFaults.filter(f=>f.status==='open'||(f.status==='resolved'&&!(f.severity&&f.severity.includes('High')||f.severity&&f.severity.includes('Critical'))));
+    const newFaults=groupedMFaults.filter(f=>f.status==='open');
+    const newFaultsOccurrences=newFaults.reduce((sum,f)=>sum+(f.unackCount!==undefined?f.unackCount:1),0);
     const mConcessions=state.concessions.filter(c=>c.machine_id===m.id&&c.active===1);
     const recentFaults=state.faults.filter(f=>f.machine_id===m.id&&new Date((f.created_at||'').replace(' ','T')+'Z')>=thirtyDaysAgo);
     const bdCount=recentFaults.filter(f=>(f.severity&&(f.severity.includes('High')||f.severity.includes('Critical')))||getFaultDowntime(f)>0).length;
@@ -1228,7 +1265,7 @@ function refreshOverview(){
       <div class="mc-card-head"><div><div class="mc-card-name">${m.name}</div><div class="mc-card-model">${m.model}</div></div>
       <span class="badge ${show?meta.cls:'b-offline'}"><span class="badge-dot" style="background:${show?meta.dot:'#94a3b8'}"></span>${show?meta.label:'OFFLINE'}${bdHtml}</span></div>
       ${mConcessions.length?`<div class="alert alert-amber" style="margin-bottom:8px;font-size:11px;padding:6px 10px">&#9888; ${mConcessions.length} active concession/restriction${mConcessions.length>1?'s':''}</div>`:''}
-      ${newFaults.length?`<div class="alert ${newFaults.length > avgNewFaults ? 'alert-red' : 'alert-amber'}" style="margin-bottom:8px;font-size:11px;padding:6px 10px;cursor:pointer" onclick="focusOverviewFaults('${m.id}'); event.stopPropagation();" title="Click to view active faults for ${m.name}">&#9888; ${newFaults.length} new fault${newFaults.length>1?'s':''}</div>`:''}
+      ${newFaultsOccurrences?`<div class="alert ${newFaultsOccurrences > avgNewFaults ? 'alert-red' : 'alert-amber'}" style="margin-bottom:8px;font-size:11px;padding:6px 10px;cursor:pointer" onclick="focusOverviewFaults('${m.id}'); event.stopPropagation();" title="Click to view active faults for ${m.name}">&#9888; ${newFaultsOccurrences} new fault${newFaultsOccurrences>1?'s':''}</div>`:''}
       <div class="mc-card-stats">
         <div class="mc-mini"><div class="mc-mini-val" style="color:${openFaults.length>0?'var(--text)':'var(--green)'}">${openFaults.length}</div><div class="mc-mini-lbl">Open faults</div></div>
         <div class="mc-mini"><div class="mc-mini-val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="mc-mini-lbl">30-day breakdowns</div></div>
@@ -1291,11 +1328,12 @@ function refreshOverview(){
   });
 
   if (sort === 'asc') overviewFaults.reverse();
+  overviewFaults = groupFaults(overviewFaults);
   document.getElementById('activeFaultsEl').innerHTML = overviewFaults.length ? overviewFaults.map(f => faultRowHTML(f, true)).join('') : '<div class="empty">No faults to display</div>';
   
   const titleEl = document.getElementById('overviewActiveFaultsTitle');
   if (titleEl) {
-    const openCount = state.faults.filter(f => {
+    const openCount = groupedAllFaults.filter(f => {
       const isBd = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
       const isOpenOrAck = f.status === 'open' || (f.status === 'resolved' && !isBd);
       return isOpenOrAck && (machineF ? f.machine_id === machineF : activeMachineIds.has(f.machine_id));
@@ -1375,7 +1413,11 @@ function refreshMachinePage(machineId){
     dispBreakdowns = dispBreakdowns.filter(f => new Date((f.created_at||'').replace(' ','T')+'Z') >= thirtyDaysAgo);
   }
 
-  const openFaults=mFaults.filter(f=>f.status==='open'||(f.status==='resolved'&&!(f.severity&&f.severity.includes('High')||f.severity&&f.severity.includes('Critical'))));
+  dispFaults = groupFaults(dispFaults);
+  dispBreakdowns = groupFaults(dispBreakdowns);
+
+  const groupedMFaults = groupFaults(mFaults);
+  const openFaults=groupedMFaults.filter(f=>f.status==='open'||(f.status==='resolved'&&!(f.severity&&f.severity.includes('High')||f.severity&&f.severity.includes('Critical'))));
   const mConcessions=state.concessions.filter(c=>c.machine_id===m.id&&c.active===1);
   const recentFaults=mFaults.filter(f=>new Date((f.created_at||'').replace(' ','T')+'Z')>=thirtyDaysAgo);
   const recentDt=recentFaults.reduce((s,f)=>s+getFaultDowntime(f),0);
@@ -1447,7 +1489,7 @@ function refreshMachinePage(machineId){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px">
       <div class="stat-card"><div class="lbl">Est. Uptime</div><div class="val" style="color:${upPct>90?'var(--green)':upPct>75?'var(--amber)':'var(--red)'}">${upPct}%</div><div class="sub">30-day estimate</div></div>
       <div class="stat-card"><div class="lbl">Downtime</div><div class="val" style="color:var(--amber)">${recentDt.toFixed(2)}h</div><div class="sub">Last 30 days Breakdown</div></div>
-      <div class="stat-card"><div class="lbl">Open Faults</div><div class="val" style="color:${openFaults.length?'var(--red)':'var(--green)'}">${openFaults.length}</div><div class="sub">${recentFaults.length} faults in last 30 days</div></div>
+      <div class="stat-card"><div class="lbl">Open Faults</div><div class="val" style="color:${openFaults.length?'var(--red)':'var(--green)'}">${openFaults.length}</div><div class="sub">${recentFaults.length} total faults in last 30 days</div></div>
       <div class="stat-card"><div class="lbl">Breakdowns</div><div class="val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="sub" style="color:${breakdownSubColor}">${breakdownSubText}</div></div>
     </div>
     <div class="tabs">
@@ -1505,12 +1547,25 @@ function faultRowHTML(f,showMachine){
   const isAck=f.status==='resolved'&&!isBreakdown;
   const isClosed=f.status==='closed'||(f.status==='resolved'&&isBreakdown);
   const sevColor=isBreakdown?'var(--red)':f.severity.includes('Medium')?'var(--amber)':'var(--blue)';
-  const checkbox = (!isClosed && !isBreakdown) ? `<input type="checkbox" class="fault-select-cb" value="${f.id}" data-status="${f.status}" style="margin-right:8px;transform:scale(1.2);flex-shrink:0" onchange="updateBulkButtons()">` : `<div style="width:25px;flex-shrink:0"></div>`;
+  const idsStr = f.groupedIds ? f.groupedIds.join(',') : f.id;
+  const checkbox = (!isClosed && !isBreakdown) ? `<input type="checkbox" class="fault-select-cb" value="${f.id}" data-ids="${idsStr}" data-status="${f.status}" style="margin-right:8px;transform:scale(1.2);flex-shrink:0" onchange="updateBulkButtons()">` : `<div style="width:25px;flex-shrink:0"></div>`;
   const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
   const canFilter = showMachine;
   const codesHtml = codes.length > 0 ? codes.map(c => `<span class="tag" style="background:var(--blue-bg);color:var(--blue);margin-right:4px${canFilter ? ';cursor:pointer' : ''}" ${canFilter ? `onclick="filterByCode('${c}'); event.stopPropagation();" title="Click to filter by this code"` : ''}>${c}</span>`).join('') : '';
   const screenshotHtml = f.screenshot_taken ? `<span class="tag" style="background:var(--green-bg);color:var(--green);">&#128247; Screenshot</span>` : '';
   
+  let recurrenceHtml = '';
+  let desc = f.description;
+  if (f.recurrenceCount > 1) {
+    let spanners = '';
+    let color = '';
+    if (f.recurrenceCount === 2) { spanners = '&#128295;'; color = 'var(--amber)'; }
+    else if (f.recurrenceCount === 3) { spanners = '&#128295;&#128295;'; color = '#ea580c'; }
+    else { spanners = '&#128295;&#128295;&#128295;'; color = 'var(--red)'; }
+    recurrenceHtml = `<span class="tag" style="background:${color}20;color:${color}; border-color:${color}50; margin-left:6px;" title="Recurring Fault">${spanners} ${f.recurrenceCount} Occurrences</span>`;
+    desc = desc.replace(/\[RECURRENCE\]\s*/g, '').trim();
+  }
+
   let iconBg = 'var(--green-bg)', iconCol = 'var(--green)', iconChar = '&#10003;';
   let statusText = 'RESOLVED', statusCol = 'var(--text3)';
   if (isUnack) { iconBg = 'var(--red-bg)'; iconCol = 'var(--red)'; iconChar = '&#9888;'; statusText = 'OPEN'; statusCol = 'var(--red)'; }
@@ -1524,17 +1579,18 @@ function faultRowHTML(f,showMachine){
   return`<div class="fault-row" style="align-items:center">
     ${checkbox}
     <div class="fault-icon" style="background:${iconBg};color:${iconCol}">${iconChar}</div>
-    <div class="fault-info"><h4>${machHtml}${catHtml} ${sevHtml}</h4>
-    <p>${f.description}</p>
-    ${codes.length || f.screenshot_taken ? `<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">${codesHtml}${screenshotHtml}</div>` : ''}
+    <div class="fault-info"><h4>${machHtml}${catHtml} ${sevHtml}${recurrenceHtml}</h4>
+    <p>${desc}</p>
+    ${codes.length || f.screenshot_taken ? `<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">${codesHtml}${screenshotHtml}</div>` : ''}
     <div style="margin-top:5px;font-size:11px;color:var(--text3)">${f.user_name} (${f.user_role}) &middot; ${fmtD(f.created_at)}${f.resolved_at?` &middot; ${isBreakdown?'Resolved':'Acknowledged'} by ${f.resolved_by} on ${fmtD(f.resolved_at)}${f.downtime_hrs ? ` &middot; ${Number(f.downtime_hrs).toFixed(2)}h downtime` : ''}`:(isUnack&&isBreakdown?` &middot; ${getFaultDowntime(f).toFixed(2)}h ongoing downtime`:'')}</div>
     </div>
     <div class="fault-meta" style="display:flex;align-items:center;gap:10px">
       <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:${statusCol}">${statusText}</span>
-      <button class="btn btn-sm" style="padding:2px 8px;" onclick="openEditFault(${f.id})">Edit</button>
-      ${isUnack?`<button class="btn btn-success btn-sm" onclick="openResolve(${f.id})">${isBreakdown?'Resolve':'Acknowledge'}</button>`:''}
-      ${isAck ? `<button class="btn btn-primary btn-sm" style="padding:2px 8px;" onclick="openFullResolve(${f.id})">Resolve</button>` : ''}
-      ${showMachine?`<button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="deleteFaultRecord(${f.id})" title="Delete Fault">&#10005;</button>`:''}
+      <button class="btn btn-sm" style="padding:2px 8px;" onclick="openRepeatFault(${f.id})" title="Log Recurrence of Fault">Recurrence</button>
+      <button class="btn btn-sm" style="padding:2px 8px;" onclick="openEditFault(${f.id}, '${idsStr}')">Edit</button>
+      ${isUnack?`<button class="btn btn-success btn-sm" onclick="openResolve(${f.id}, '${idsStr}')">${isBreakdown?'Resolve':'Acknowledge'}</button>`:''}
+      ${isAck ? `<button class="btn btn-primary btn-sm" style="padding:2px 8px;" onclick="openFullResolve(${f.id}, '${idsStr}')">Resolve</button>` : ''}
+      ${showMachine?`<button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="deleteFaultRecord(${f.id}, '${idsStr}')" title="Delete Fault">&#10005;</button>`:''}
     </div>
   </div>`;
 }
@@ -1777,6 +1833,43 @@ function openFaultFor(machineId, force = false, onComplete = null){
   return true;
 }
 
+function openRepeatFault(id) {
+  const f = state.faults.find(x => x.id === id);
+  if (!f) return;
+  if (!checkStationWarning(f.machine_id, () => openRepeatFault(id))) return;
+  
+  document.getElementById('faultMachine').value = f.machine_id;
+  document.getElementById('faultCategory').value = f.category;
+  document.getElementById('faultSeverity').value = f.severity;
+  document.getElementById('faultStatusChange').value = '';
+  let cleanDesc = f.description.replace(/\[RECURRENCE\]\s*/g, '').trim();
+  const resolvedIdx = cleanDesc.indexOf('\n\n[Resolved by ');
+  if (resolvedIdx !== -1) {
+    cleanDesc = cleanDesc.substring(0, resolvedIdx).trim();
+  }
+  document.getElementById('faultDesc').value = cleanDesc;
+  
+  const codeList = document.getElementById('faultCodeList');
+  codeList.innerHTML = '';
+  const codes = f.fault_codes ? JSON.parse(f.fault_codes) : [];
+  codes.forEach(code => {
+    const codeEl = document.createElement('span');
+    codeEl.className = 'tag';
+    codeEl.style.cursor = 'pointer';
+    codeEl.style.background = 'var(--blue-bg)';
+    codeEl.style.color = 'var(--blue)';
+    codeEl.textContent = code;
+    codeEl.onclick = () => codeEl.remove();
+    codeList.appendChild(codeEl);
+  });
+  document.getElementById('faultCodeInput').value = '';
+  document.getElementById('faultScreenshot').checked = f.screenshot_taken === 1;
+  document.getElementById('faultUser').value = '';
+  
+  openModal('faultModal');
+  setTimeout(() => document.getElementById('faultUser').focus(), 100);
+}
+
 function addFaultCode() {
     const input = document.getElementById('faultCodeInput');
     const code = input.value.trim();
@@ -1810,14 +1903,14 @@ async function submitFault(){
   await api('POST','/faults',body);closeModal('faultModal');
   document.getElementById('faultUser').value='';document.getElementById('faultDesc').value='';toast('Fault reported','error');
 }
-function openResolve(faultId){
+function openResolve(faultId, groupedIdsStr){
   const f=state.faults.find(x=>x.id===faultId);
   const m=f?state.machines.find(x=>x.id===f.machine_id):null;
   if(f && (f.severity.includes('High')||f.severity.includes('Critical')||(m&&m.status==='breakdown'))) {
-    requestBreakdownResolve(f.machine_id, faultId);
+    requestBreakdownResolve(f.machine_id, faultId, groupedIdsStr);
     return;
   }
-  document.getElementById('resolveFaultId').value=faultId;
+  document.getElementById('resolveFaultId').value=groupedIdsStr || faultId;
   document.getElementById('resolveUser').value='';
   document.getElementById('resolveMarkAsResolved').checked=false;
   const titleEl=document.querySelector('#resolveModal .modal-head h2');
@@ -1831,6 +1924,20 @@ function openResolve(faultId){
     document.getElementById('resolveCategory').value = f.category;
     document.getElementById('resolveSeverity').value = f.severity;
     document.getElementById('resolveDesc').value = f.description;
+    
+    // Auto-check "Mark as fully resolved" if this is a recurrence and the original is still open
+    if (f.description.includes('[RECURRENCE]')) {
+      const baseDesc = f.description.replace(/\[RECURRENCE\]\s*/g, '').trim();
+      const originalIsOpen = state.faults.some(other => 
+        other.machine_id === f.machine_id && 
+        other.id !== f.id && 
+        other.status === 'open' && 
+        (other.description.trim() === baseDesc || baseDesc.includes(other.description.trim()))
+      );
+      if (originalIsOpen) {
+        document.getElementById('resolveMarkAsResolved').checked = true;
+      }
+    }
   }
   
   openModal('resolveModal');
@@ -1842,18 +1949,20 @@ async function submitResolve(){
   const severity=document.getElementById('resolveSeverity').value;
   const description=document.getElementById('resolveDesc').value.trim();
   if(!description){toast('Description required','error');return}
-  const faultId = document.getElementById('resolveFaultId').value;
-  await api('PATCH',`/faults/${faultId}/resolve`,{resolved_by, category, severity, description});
-  if(document.getElementById('resolveMarkAsResolved').checked){
-    await api('PATCH',`/faults/${faultId}/close`,{closed_by: resolved_by, notes: 'Fully resolved during acknowledgement.'});
+  const faultIds = document.getElementById('resolveFaultId').value.split(',');
+  for (const fid of faultIds) {
+    await api('PATCH',`/faults/${fid}/resolve`,{resolved_by, category, severity, description});
+    if(document.getElementById('resolveMarkAsResolved').checked){
+      await api('PATCH',`/faults/${fid}/close`,{closed_by: resolved_by, notes: 'Fully resolved during acknowledgement.'});
+    }
   }
-  const f=state.faults.find(x=>x.id===parseInt(faultId));
+  const f=state.faults.find(x=>x.id===parseInt(faultIds[0]));
   const isBreakdown=f&&(f.severity.includes('High')||f.severity.includes('Critical'));
   closeModal('resolveModal');toast(isBreakdown?'Breakdown resolved':'Fault acknowledged','success');
 }
 
-function openFullResolve(faultId) {
-  document.getElementById('fullResolveFaultId').value = faultId;
+function openFullResolve(faultId, groupedIdsStr) {
+  document.getElementById('fullResolveFaultId').value = groupedIdsStr || faultId;
   document.getElementById('fullResolveUser').value = '';
   document.getElementById('fullResolveNotes').value = '';
   openModal('fullResolveModal');
@@ -1861,12 +1970,15 @@ function openFullResolve(faultId) {
 }
 
 async function submitFullResolve() {
-  const faultId = document.getElementById('fullResolveFaultId').value;
+  const faultIds = document.getElementById('fullResolveFaultId').value.split(',');
   const user = document.getElementById('fullResolveUser').value.trim();
   const notes = document.getElementById('fullResolveNotes').value.trim();
   if (!user) { toast('Please enter your name', 'error'); return; }
 
-  const res = await api('PATCH', `/faults/${faultId}/close`, { closed_by: user, notes });
+  let res;
+  for (const fid of faultIds) {
+    res = await api('PATCH', `/faults/${fid}/close`, { closed_by: user, notes });
+  }
   if (res) {
     toast('Fault fully resolved', 'success');
     closeModal('fullResolveModal');
@@ -1955,7 +2067,14 @@ function bulkAcknowledgeOnly(pageId) {
   }
   if (!container) return;
   const selectedCbs = [...container.querySelectorAll('.fault-select-cb:checked')].filter(cb => cb.dataset.status === 'open');
-  const selectedIds = selectedCbs.map(cb => parseInt(cb.value));
+  const selectedIds = [];
+  selectedCbs.forEach(cb => {
+    if (cb.dataset.ids) {
+      selectedIds.push(...cb.dataset.ids.split(',').map(id => parseInt(id)));
+    } else {
+      selectedIds.push(parseInt(cb.value));
+    }
+  });
   if (selectedIds.length === 0) { toast('No unacknowledged faults selected', 'info'); return; }
   document.getElementById('bulkAckOnlyIds').value = JSON.stringify(selectedIds);
   document.getElementById('bulkAckOnlyDesc').textContent = `You are about to acknowledge ${selectedIds.length} fault(s). Already acknowledged faults will be ignored. Please enter your name to confirm.`;
@@ -1975,11 +2094,11 @@ async function submitBulkAckOnly() {
   }
 }
 
-function openEditFault(id) {
+function openEditFault(id, groupedIdsStr) {
   const f = state.faults.find(x => x.id === id);
   if (!f) return;
 
-  document.getElementById('editFaultId').value = id;
+  document.getElementById('editFaultId').value = groupedIdsStr || id;
 
   const downtimeGroup = document.getElementById('editFaultDowntimeGroup');
   const isResolvedBreakdown = f.status === 'resolved' && (f.severity.includes('High') || f.severity.includes('Critical') || (f.downtime_hrs !== null && f.downtime_hrs > 0));
@@ -2038,7 +2157,7 @@ function addEditFaultCode() {
 }
 
 async function submitEditFault() {
-  const id = document.getElementById('editFaultId').value;
+  const faultIds = document.getElementById('editFaultId').value.split(',');
   const faultCodes = [...document.querySelectorAll('#editFaultCodeList .tag')].map(el => el.textContent);
   const body = {
     category: document.getElementById('editFaultCategory').value,
@@ -2053,7 +2172,16 @@ async function submitEditFault() {
   }
 
   if (!body.description) { toast('Description is required', 'error'); return; }
-  const res = await api('PUT', `/faults/${id}`, body);
+  
+  let res;
+  for (let i = 0; i < faultIds.length; i++) {
+    const fid = faultIds[i];
+    const currentBody = { ...body };
+    if (i !== 0 && currentBody.downtime_hrs !== undefined) {
+      delete currentBody.downtime_hrs; // Only apply downtime to the primary record
+    }
+    res = await api('PUT', `/faults/${fid}`, currentBody);
+  }
   if (res) {
     toast('Fault updated successfully', 'success');
     closeModal('editFaultModal');
@@ -2296,7 +2424,7 @@ async function confirmUpdate() {
 }
 
 let pendingBreakdown=null;
-async function requestBreakdownResolve(machineId, faultId = null){
+async function requestBreakdownResolve(machineId, faultId = null, groupedIdsStr = null){
   pendingBreakdown=machineId;breakdownStartTime=null;
   document.getElementById('rbUser').value='';document.getElementById('rbNotes').value='';document.getElementById('rbDowntime').value='';document.getElementById('rbDowntime').placeholder='Calculating...';
   document.getElementById('rbApplyClinicalHours').checked=true;
@@ -2316,7 +2444,7 @@ async function requestBreakdownResolve(machineId, faultId = null){
     document.getElementById('rbCategory').value = f.category;
     document.getElementById('rbSeverity').value = f.severity;
     document.getElementById('rbDesc').value = f.description;
-    document.getElementById('rbFaultId').value = f.id;
+    document.getElementById('rbFaultId').value = groupedIdsStr || f.id;
   } else {
     document.getElementById('rbCategory').value = state.settings?.default_fault_category || 'Other';
     document.getElementById('rbSeverity').value = 'High';
@@ -2349,6 +2477,27 @@ async function confirmBreakdownResolve(){
     resolved_by:user,notes:document.getElementById('rbNotes').value.trim(),downtime_hrs:document.getElementById('rbDowntime').value, 
     next_status:nextStatus, category, severity, description, fault_id: faultId
   });
+  const faultIds = faultId ? faultId.split(',') : [];
+  
+  if (faultIds.length > 0) {
+    for (let i = 0; i < faultIds.length; i++) {
+      const fid = faultIds[i];
+      if (i === 0) {
+        await api('POST',`/machines/${pendingBreakdown}/resolve-breakdown`,{
+          resolved_by:user,notes:document.getElementById('rbNotes').value.trim(),downtime_hrs:document.getElementById('rbDowntime').value, 
+          next_status:nextStatus, category, severity, description, fault_id: fid
+        });
+      } else {
+        await api('PATCH',`/faults/${fid}/resolve`,{resolved_by: user, category, severity, description});
+        await api('PATCH',`/faults/${fid}/close`,{closed_by: user, notes: 'Resolved as part of breakdown group.'});
+      }
+    }
+  } else {
+    await api('POST',`/machines/${pendingBreakdown}/resolve-breakdown`,{
+      resolved_by:user,notes:document.getElementById('rbNotes').value.trim(),downtime_hrs:document.getElementById('rbDowntime').value, 
+      next_status:nextStatus, category, severity, description, fault_id: ''
+    });
+  }
   closeModal('resolveBreakdownModal');pendingBreakdown=null;breakdownStartTime=null;
 }
 function recalculateBreakdownTime(){
@@ -2548,7 +2697,7 @@ function renderUtilTables() {
   }
 }
 
-let selectedGraphMachines = { dt: new Set(), faults: new Set(), bd: new Set() };
+let selectedGraphMachines = { dt: new Set(['total']), faults: new Set(['total']), bd: new Set(['total']) };
 let graphSortState = { dt: { col: 'name', asc: true }, faults: { col: 'name', asc: true }, bd: { col: 'name', asc: true } };
 
 function sortGraphTable(type, col) {
@@ -2589,17 +2738,22 @@ function buildInteractiveSection(type, title) {
   tableHtml += `<th style="text-align:right;cursor:pointer;user-select:none" onclick="sortGraphTable('${type}', 'total')" title="Sort">Total &#8597;</th></tr></thead><tbody>`;
   
   let rows = [];
+  let totalRowData = new Array(months.length).fill(0);
+  let grandTotal = 0;
+
   machines.forEach((m, i) => {
     const isSel = selected.has(m.id);
     const color = colors[i % colors.length];
     let rowData = [], total = 0;
-    months.forEach(mKey => {
+    months.forEach((mKey, idx) => {
         let val = 0;
         if (type === 'dt') val = fbm[mKey].machines[m.id]?.dt || 0;
         if (type === 'faults') val = fbm[mKey].machines[m.id]?.count || 0;
         if (type === 'bd') val = fbm[mKey].machines[m.id]?.bdCount || 0;
         rowData.push(val); total += val;
+        totalRowData[idx] += val;
     });
+    grandTotal += total;
     rows.push({ m, isSel, color, rowData, total });
   });
 
@@ -2617,6 +2771,16 @@ function buildInteractiveSection(type, title) {
     r.rowData.forEach(val => { tableHtml += `<td style="text-align:right; font-family:var(--mono); color:var(--text2)">${type === 'dt' && val > 0 ? val.toFixed(1) : (val > 0 ? val : '-')}</td>`; });
     tableHtml += `<td style="text-align:right; font-weight:bold; font-family:var(--mono); color:var(--text)">${type === 'dt' ? r.total.toFixed(1) : r.total}</td></tr>`;
   });
+
+  const isTotalSel = selected.has('total');
+  const totalColor = '#0f1923';
+  if (isTotalSel) seriesData.push({ name: 'Total', values: totalRowData, color: totalColor });
+  
+  tableHtml += `<tr style="cursor:pointer; background:${isTotalSel ? 'var(--blue-bg)' : 'var(--bg3)'}" onclick="toggleAdminGraph('${type}', 'total')" title="Click to toggle Total on graph">
+      <td style="font-weight:700; border-left:4px solid ${isTotalSel ? totalColor : 'transparent'}">Total</td>`;
+  totalRowData.forEach(val => { tableHtml += `<td style="text-align:right; font-weight:600; font-family:var(--mono); color:var(--text2)">${type === 'dt' && val > 0 ? val.toFixed(1) : (val > 0 ? val : '-')}</td>`; });
+  tableHtml += `<td style="text-align:right; font-weight:bold; font-family:var(--mono); color:var(--text)">${type === 'dt' ? grandTotal.toFixed(1) : grandTotal}</td></tr>`;
+  
   tableHtml += `</tbody></table>`;
   let graphHtml = makeInteractiveLineGraph(seriesData, months.map(mKey => fbm[mKey].label));
   return `<div class="card" style="margin-top:16px"><div class="card-head" style="margin-bottom:12px">${title}</div><div class="card-body" style="overflow-x:auto; padding-top:0">${tableHtml}${graphHtml}</div></div>`;
@@ -2897,7 +3061,10 @@ async function loadAdminData(){
   });
   const totalDt=summary.reduce((s,m)=>s+m.downtime_hrs,0);
   const totalFaults=summary.reduce((s,m)=>s+m.fault_count,0);
-  const openFaults = summary.reduce((s, m) => s + m.open_faults, 0);
+  const openFaults = groupFaults(adminReport.faults).filter(f => {
+    const isBreakdown = f.severity && (f.severity.includes('High') || f.severity.includes('Critical'));
+    return f.status === 'open' || (f.status === 'resolved' && !isBreakdown);
+  }).length;
   document.getElementById('adminMetrics').innerHTML=`
     <div class="metric-card"><div class="lbl">Activity Entries</div><div class="val">${activity.length}</div><div class="sub">in period</div></div>
     <div class="metric-card"><div class="lbl">Faults Reported</div><div class="val" style="color:var(--red)">${totalFaults}</div><div class="sub">${openFaults} open</div></div>
@@ -3248,17 +3415,21 @@ function renderAdminFaults(){
     return true;
   });
   if(sort==='asc')filtered.reverse();
+  filtered = groupFaults(filtered);
   document.getElementById('adminFaultList').innerHTML=filtered.length?filtered.map(f=>faultRowHTML(f,true)).join(''):'<div class="empty">No faults match criteria</div>';
   updateBulkButtons();
 }
 
-function deleteFaultRecord(id){
-  document.getElementById('deleteFaultId').value = id;
+function deleteFaultRecord(id, groupedIdsStr = null){
+  document.getElementById('deleteFaultId').value = groupedIdsStr || id;
   openModal('deleteFaultModal');
 }
 async function executeDeleteFault(){
-  const id = document.getElementById('deleteFaultId').value;
-  const res = await api('DELETE', `/faults/${id}`);
+  const faultIds = document.getElementById('deleteFaultId').value.split(',');
+  let res;
+  for (const fid of faultIds) {
+    res = await api('DELETE', `/faults/${fid}`);
+  }
   if(res){
     toast('Fault deleted', 'success');
   }
