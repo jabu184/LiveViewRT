@@ -256,6 +256,8 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
             </select>
             <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="overviewOpenOnly" onchange="refreshOverview()" checked style="width:auto">Open Only</label>
             <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="overviewHideAck" onchange="refreshOverview()" checked style="width:auto">Hide Acknowledged</label>
+            <div style="width:1px;height:16px;background:var(--border);margin:0 4px;"></div>
+            <label style="font-size:12px;color:var(--text2);display:flex;align-items:center;gap:4px;cursor:pointer" title="Enable sounds and notifications for new faults"><input type="checkbox" id="overviewAlertsToggle" onchange="localStorage.setItem('lv_alerts', this.checked)" style="width:auto">Alerts</label>
             <button id="overviewResetBtn" class="btn btn-sm" style="margin-left:4px" onclick="resetOverviewFilters()" disabled>Reset</button>
             <div id="overview-fault-buttons" style="margin-left:auto; display: none;">
               <button class="btn btn-sm" onclick="selectAllFaults('overview')">Select All</button>
@@ -704,6 +706,12 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
       <div class="form-group"><label>Severity <span style="color:var(--red)">*</span></label><select id="editFaultSeverity"></select></div>
     </div>
     <div class="form-group"><label>Description <span style="color:var(--red)">*</span></label><textarea id="editFaultDesc" placeholder="Error codes, symptoms, conditions&hellip;"></textarea></div>
+    <div id="editFaultResolutionGroup" style="display:none;">
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+      <h3 style="font-size:12px; margin-bottom:8px; color:var(--text2)">Resolution Details</h3>
+      <div class="form-group"><label>Resolved By</label><input id="editFaultResolvedBy"></div>
+      <div class="form-group"><label>Resolution Notes</label><textarea id="editFaultResolutionNotes" style="min-height:50px"></textarea></div>
+    </div>
     <div class="form-group" id="editFaultDowntimeGroup" style="display:none;">
         <label>Downtime (h)</label>
         <input type="number" step="0.01" id="editFaultDowntime">
@@ -781,7 +789,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="modal-head" style="justify-content:flex-end;margin-bottom:10px"><button class="modal-close" onclick="closeModal('aboutModal')">&#10005;</button></div>
     <div style="text-align:center;padding:0 0 20px">
       <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:300px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.35</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.36</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:20px">April 2026</p>
 
@@ -959,6 +967,37 @@ const STATUS_OPTS=[
   {id:'breakdown',label:'Breakdown'}
 ];
 
+let titleFlashTimer = null;
+const originalTitle = document.title;
+let sharedAudioCtx = null;
+function startTitleFlash(msg) {
+  if (titleFlashTimer) clearInterval(titleFlashTimer);
+  let showMsg = true;
+  titleFlashTimer = setInterval(() => {
+    document.title = showMsg ? msg : originalTitle;
+    showMsg = !showMsg;
+  }, 1000);
+}
+function stopTitleFlash() {
+  if (titleFlashTimer) clearInterval(titleFlashTimer);
+  titleFlashTimer = null;
+  document.title = originalTitle;
+}
+window.addEventListener('focus', stopTitleFlash);
+window.addEventListener('keydown', stopTitleFlash);
+window.addEventListener('click', () => {
+  stopTitleFlash();
+  if (!sharedAudioCtx) {
+    try { sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  if (sharedAudioCtx && sharedAudioCtx.state === 'suspended') {
+    sharedAudioCtx.resume();
+  }
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+});
+
 let ws,wsTimer,isFirstInit=true;
 function connectWS(){
   ws=new WebSocket(WS_URL);
@@ -983,6 +1022,12 @@ function handleWS(msg){
     } else {
       document.getElementById('localStationBtn').textContent = `Set Station`;
     }
+    if(isFirstInit) {
+      const alertsPref = localStorage.getItem('lv_alerts');
+      if (alertsPref !== null && document.getElementById('overviewAlertsToggle')) {
+        document.getElementById('overviewAlertsToggle').checked = alertsPref === 'true';
+      }
+    }
     if (!isFirstInit) {
       if (currentPage === 'admin' || currentPage === 'overview') showPage(currentPage);
       else if (currentMachine) showMachine(currentMachine);
@@ -997,7 +1042,23 @@ function handleWS(msg){
   if(msg.type==='machine_deleted'){state.machines=state.machines.filter(m=>m.id!==msg.payload.id);buildAll();toast(`Machine deleted`,'info');if(currentMachine===msg.payload.id)showPage('overview');if(currentPage==='admin')loadAdminData();return}
   if(msg.type==='machines_reordered'){state.machines=msg.payload;buildAll();if(currentPage==='admin')loadAdminData();return}
   if(msg.type==='activity_added'){state.activity.unshift(msg.payload);refreshOverview();refreshMachinePage(msg.payload.machine_id);return}
-  if(msg.type==='fault_added'){state.faults.unshift(msg.payload);refreshOverview();refreshMachinePage(msg.payload.machine_id);toast(`Fault reported on ${msg.payload.machine_name}`,'error');return}
+  if(msg.type==='fault_added'){
+    state.faults.unshift(msg.payload);
+    refreshOverview();
+    refreshMachinePage(msg.payload.machine_id);
+    toast(`Fault reported on ${msg.payload.machine_name}`,'error');
+    const alertsEnabled = document.getElementById('overviewAlertsToggle')?.checked;
+    if (alertsEnabled) {
+      if (currentPage === 'overview') playAlertSound();
+      if (document.hidden) {
+        startTitleFlash(`⚠️ Fault: ${msg.payload.machine_name}`);
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("LiveViewRT", { body: `New fault reported on ${msg.payload.machine_name}` });
+        }
+      }
+    }
+    return;
+  }
   if(msg.type==='fault_updated'){const fi=state.faults.findIndex(f=>f.id===msg.payload.id);if(fi>=0)state.faults[fi]=msg.payload;refreshOverview();refreshMachinePage(msg.payload.machine_id)}
   if(msg.type==='fault_deleted'){
     state.faults=state.faults.filter(f=>f.id!==msg.payload.id);
@@ -1013,6 +1074,35 @@ function handleWS(msg){
 }
 
 function buildAll(){buildBanner();buildMachineSelects();buildDropdowns();buildMachinePages();populateSettings();refreshOverview()}
+
+function playAlertSound() {
+  try {
+    if (!sharedAudioCtx) sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (sharedAudioCtx.state === 'suspended') sharedAudioCtx.resume();
+    
+    const playChime = (freq, startTime) => {
+      const osc = sharedAudioCtx.createOscillator();
+      const gain = sharedAudioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(sharedAudioCtx.destination);
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.1, startTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.6);
+      
+      osc.start(startTime);
+      osc.stop(startTime + 0.6);
+    };
+
+    playChime(523.25, sharedAudioCtx.currentTime);       // C5
+    playChime(659.25, sharedAudioCtx.currentTime + 0.15); // E5
+  } catch (e) {
+    console.warn('Alert sound failed', e);
+  }
+}
 
 function buildBanner(){
   document.getElementById('statusBanner').innerHTML=state.machines.filter(m=>!m.archived).map(m=>{
@@ -1572,6 +1662,14 @@ function faultRowHTML(f,showMachine){
   else if (isAck) { iconBg = 'var(--amber-bg)'; iconCol = 'var(--amber)'; iconChar = '&#9888;'; statusText = 'OPEN (ACKNOWLEDGED)'; statusCol = 'var(--amber)'; }
   else if (isClosed) { iconBg = 'var(--slate-bg)'; iconCol = 'var(--slate)'; iconChar = '&#10003;'; statusText = 'RESOLVED'; statusCol = 'var(--text3)'; }
   
+  let ageHtml = '';
+  if (!isClosed && f.created_at) {
+    const createdDate = new Date((f.created_at||'').replace(' ','T')+'Z');
+    const diffDays = Math.floor((new Date() - createdDate) / (1000 * 60 * 60 * 24));
+    const ageColor = diffDays > 14 ? 'var(--green)' : 'inherit';
+    ageHtml = ` &middot; <span style="color:${ageColor};font-weight:${diffDays > 14 ? '600' : 'inherit'}">${diffDays} day${diffDays === 1 ? '' : 's'} since last occurrence</span>`;
+  }
+
   const machHtml = showMachine ? (canFilter ? `<span class="tag" style="cursor:pointer" onclick="quickFilterFaults('faultFilterMachine', '${f.machine_id}'); event.stopPropagation();" title="Click to filter by this machine">${f.machine_name||f.machine_id}</span> &nbsp;` : `<span class="tag">${f.machine_name||f.machine_id}</span> &nbsp;`) : '';
   const catHtml = canFilter ? `<span style="cursor:pointer" onclick="quickFilterFaults('faultFilterCategory', '${f.category.replace(/'/g, "\\'")}'); event.stopPropagation();" title="Click to filter by this category">${f.category}</span>` : `<span>${f.category}</span>`;
   const sevHtml = canFilter ? `<span style="cursor:pointer;color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px" onclick="quickFilterFaults('faultFilterSeverity', '${f.severity.replace(/'/g, "\\'")}'); event.stopPropagation();" title="Click to filter by this severity">${f.severity}</span>` : `<span style="color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px">${f.severity}</span>`;
@@ -1582,10 +1680,12 @@ function faultRowHTML(f,showMachine){
     <div class="fault-info"><h4>${machHtml}${catHtml} ${sevHtml}${recurrenceHtml}</h4>
     <p>${desc}</p>
     ${codes.length || f.screenshot_taken ? `<div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; align-items:center;">${codesHtml}${screenshotHtml}</div>` : ''}
-    <div style="margin-top:5px;font-size:11px;color:var(--text3)">${f.user_name} (${f.user_role}) &middot; ${fmtD(f.created_at)}${f.resolved_at?` &middot; ${isBreakdown?'Resolved':'Acknowledged'} by ${f.resolved_by} on ${fmtD(f.resolved_at)}${f.downtime_hrs ? ` &middot; ${Number(f.downtime_hrs).toFixed(2)}h downtime` : ''}`:(isUnack&&isBreakdown?` &middot; ${getFaultDowntime(f).toFixed(2)}h ongoing downtime`:'')}</div>
+    <div style="margin-top:5px;font-size:11px;color:var(--text3)">${f.user_name} (${f.user_role}) &middot; ${fmtDT(f.created_at)}${ageHtml}${f.resolved_at?` &middot; ${isBreakdown?'Resolved':'Acknowledged'} by ${f.resolved_by} on ${fmtDT(f.resolved_at)}${f.downtime_hrs ? ` &middot; ${Number(f.downtime_hrs).toFixed(2)}h downtime` : ''}`:(isUnack&&isBreakdown?` &middot; ${getFaultDowntime(f).toFixed(2)}h ongoing downtime`:'')}</div>
     </div>
     <div class="fault-meta" style="display:flex;align-items:center;gap:10px">
-      <span style="font-family:var(--mono);font-size:10px;font-weight:600;color:${statusCol}">${statusText}</span>
+      <div style="text-align:right;line-height:1.2">
+        <div style="font-family:var(--mono);font-size:10px;font-weight:600;color:${statusCol}">${statusText}</div>
+      </div>
       <button class="btn btn-sm" style="padding:2px 8px;" onclick="openRepeatFault(${f.id})" title="Log Recurrence of Fault">Recurrence</button>
       <button class="btn btn-sm" style="padding:2px 8px;" onclick="openEditFault(${f.id}, '${idsStr}')">Edit</button>
       ${isUnack?`<button class="btn btn-success btn-sm" onclick="openResolve(${f.id}, '${idsStr}')">${isBreakdown?'Resolve':'Acknowledge'}</button>`:''}
@@ -1843,9 +1943,9 @@ function openRepeatFault(id) {
   document.getElementById('faultSeverity').value = f.severity;
   document.getElementById('faultStatusChange').value = '';
   let cleanDesc = f.description.replace(/\[RECURRENCE\]\s*/g, '').trim();
-  const resolvedIdx = cleanDesc.indexOf('\n\n[Resolved by ');
-  if (resolvedIdx !== -1) {
-    cleanDesc = cleanDesc.substring(0, resolvedIdx).trim();
+  const resolvedMatch = cleanDesc.match(/\[Resolved by (.*?)\](?::\s*([\s\S]*?))?\s*$/);
+  if (resolvedMatch) {
+    cleanDesc = cleanDesc.substring(0, resolvedMatch.index).trim();
   }
   document.getElementById('faultDesc').value = cleanDesc;
   
@@ -2053,7 +2153,19 @@ async function submitBulkAcknowledge() {
   if (!user) { toast('Please enter your name', 'error'); return; }
   const res = await api('POST', '/faults/bulk-acknowledge', { ids, resolved_by: user });
   if (res) {
-    await Promise.all(ids.map(id => api('PATCH', `/faults/${id}/close`, { closed_by: user, notes: 'Fully closed via bulk action.' })));
+    await Promise.all(ids.map(async id => {
+      const f = state.faults.find(x => x.id == id);
+      if (f) {
+        let finalDesc = f.description;
+        finalDesc += `\n\n[Resolved by ${user}]`;
+        await api('PUT', `/faults/${id}`, {
+          category: f.category, severity: f.severity, description: finalDesc, 
+          screenshot_taken: f.screenshot_taken, fault_codes: f.fault_codes || '[]'
+        });
+      }
+      return api('PATCH', `/faults/${id}/close`, { closed_by: user, notes: 'Fully closed via bulk action.' });
+      return api('PATCH', `/faults/${id}/close`, { closed_by: user, notes: '' });
+    }));
     toast(`${ids.length} fault(s) closed.`, 'success'); closeModal('bulkAcknowledgeModal');
   }
 }
@@ -2117,7 +2229,29 @@ function openEditFault(id, groupedIdsStr) {
   sevEl.innerHTML = (state.settings?.fault_severities ? JSON.parse(state.settings.fault_severities) : []).map(s => `<option value="${s}">${s}</option>`).join('');
   sevEl.value = f.severity;
 
-  document.getElementById('editFaultDesc').value = f.description;
+  let baseDesc = f.description;
+  let resNotes = "";
+  let resBy = "";
+  const resolvedMatch = baseDesc.match(/\[Resolved by (.*?)\](?::\s*([\s\S]*?))?\s*$/);
+  if (resolvedMatch) {
+    resBy = resolvedMatch[1];
+    resNotes = resolvedMatch[2] || "";
+    baseDesc = baseDesc.substring(0, resolvedMatch.index).trim();
+  }
+
+  document.getElementById('editFaultDesc').value = baseDesc;
+  
+  const resGroup = document.getElementById('editFaultResolutionGroup');
+  if (f.status === 'closed' || f.status === 'resolved' || resolvedMatch) {
+    if (resGroup) resGroup.style.display = 'block';
+    document.getElementById('editFaultResolvedBy').value = resBy || f.resolved_by || f.user_name || '';
+    document.getElementById('editFaultResolutionNotes').value = resNotes;
+  } else {
+    if (resGroup) resGroup.style.display = 'none';
+    document.getElementById('editFaultResolvedBy').value = '';
+    document.getElementById('editFaultResolutionNotes').value = '';
+  }
+
   document.getElementById('editFaultScreenshot').checked = f.screenshot_taken === 1;
 
   const codeList = document.getElementById('editFaultCodeList');
@@ -2159,10 +2293,23 @@ function addEditFaultCode() {
 async function submitEditFault() {
   const faultIds = document.getElementById('editFaultId').value.split(',');
   const faultCodes = [...document.querySelectorAll('#editFaultCodeList .tag')].map(el => el.textContent);
+  
+  let finalDesc = document.getElementById('editFaultDesc').value.trim();
+  const resGroup = document.getElementById('editFaultResolutionGroup');
+  if (resGroup && resGroup.style.display === 'block') {
+    const resBy = document.getElementById('editFaultResolvedBy').value.trim();
+    const resNotes = document.getElementById('editFaultResolutionNotes').value.trim();
+    if (resNotes) {
+        finalDesc += `\n\n[Resolved by ${resBy || 'Unknown'}]: ${resNotes}`;
+    } else if (resBy) {
+        finalDesc += `\n\n[Resolved by ${resBy}]`;
+    }
+  }
+
   const body = {
     category: document.getElementById('editFaultCategory').value,
     severity: document.getElementById('editFaultSeverity').value,
-    description: document.getElementById('editFaultDesc').value.trim(),
+    description: finalDesc,
     screenshot_taken: document.getElementById('editFaultScreenshot').checked ? 1 : 0,
     fault_codes: JSON.stringify(faultCodes)
   };
@@ -2471,12 +2618,13 @@ async function confirmBreakdownResolve(){
   const nextStatus=document.getElementById('rbNextStatus').value;
   const category=document.getElementById('rbCategory').value;
   const severity=document.getElementById('rbSeverity').value;
-  const description=document.getElementById('rbDesc').value.trim();
+  let description=document.getElementById('rbDesc').value.trim();
   const faultId=document.getElementById('rbFaultId').value;
-  await api('POST',`/machines/${pendingBreakdown}/resolve-breakdown`,{
-    resolved_by:user,notes:document.getElementById('rbNotes').value.trim(),downtime_hrs:document.getElementById('rbDowntime').value, 
-    next_status:nextStatus, category, severity, description, fault_id: faultId
-  });
+  const notes=document.getElementById('rbNotes').value.trim();
+
+  if (notes) description += `\n\n[Resolved by ${user}]: ${notes}`;
+  else description += `\n\n[Resolved by ${user}]`;
+
   const faultIds = faultId ? faultId.split(',') : [];
   
   if (faultIds.length > 0) {
@@ -2484,17 +2632,17 @@ async function confirmBreakdownResolve(){
       const fid = faultIds[i];
       if (i === 0) {
         await api('POST',`/machines/${pendingBreakdown}/resolve-breakdown`,{
-          resolved_by:user,notes:document.getElementById('rbNotes').value.trim(),downtime_hrs:document.getElementById('rbDowntime').value, 
+          resolved_by:user,notes:notes,downtime_hrs:document.getElementById('rbDowntime').value, 
           next_status:nextStatus, category, severity, description, fault_id: fid
         });
       } else {
         await api('PATCH',`/faults/${fid}/resolve`,{resolved_by: user, category, severity, description});
-        await api('PATCH',`/faults/${fid}/close`,{closed_by: user, notes: 'Resolved as part of breakdown group.'});
+        await api('PATCH',`/faults/${fid}/close`,{closed_by: user, notes: ''});
       }
     }
   } else {
     await api('POST',`/machines/${pendingBreakdown}/resolve-breakdown`,{
-      resolved_by:user,notes:document.getElementById('rbNotes').value.trim(),downtime_hrs:document.getElementById('rbDowntime').value, 
+      resolved_by:user,notes:notes,downtime_hrs:document.getElementById('rbDowntime').value, 
       next_status:nextStatus, category, severity, description, fault_id: ''
     });
   }
