@@ -789,7 +789,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="modal-head" style="justify-content:flex-end;margin-bottom:10px"><button class="modal-close" onclick="closeModal('aboutModal')">&#10005;</button></div>
     <div style="text-align:center;padding:0 0 20px">
       <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:300px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.36</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.37</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:20px">April 2026</p>
 
@@ -1023,6 +1023,16 @@ function handleWS(msg){
       document.getElementById('localStationBtn').textContent = `Set Station`;
     }
     if(isFirstInit) {
+      const hash = window.location.hash.substring(1);
+      if (hash) {
+        handleHashOnLoad();
+      } else if (defMach && state.machines.find(m => m.id === defMach && !m.archived)) {
+        history.replaceState({ type: 'machine', id: defMach }, '', '#machine-' + defMach);
+        showMachine(defMach, true, true);
+      } else {
+        history.replaceState({ type: 'page', id: 'overview' }, '', '#overview');
+      }
+      
       const alertsPref = localStorage.getItem('lv_alerts');
       if (alertsPref !== null && document.getElementById('overviewAlertsToggle')) {
         document.getElementById('overviewAlertsToggle').checked = alertsPref === 'true';
@@ -1357,8 +1367,8 @@ function refreshOverview(){
       ${mConcessions.length?`<div class="alert alert-amber" style="margin-bottom:8px;font-size:11px;padding:6px 10px">&#9888; ${mConcessions.length} active concession/restriction${mConcessions.length>1?'s':''}</div>`:''}
       ${newFaultsOccurrences?`<div class="alert ${newFaultsOccurrences > avgNewFaults ? 'alert-red' : 'alert-amber'}" style="margin-bottom:8px;font-size:11px;padding:6px 10px;cursor:pointer" onclick="focusOverviewFaults('${m.id}'); event.stopPropagation();" title="Click to view active faults for ${m.name}">&#9888; ${newFaultsOccurrences} new fault${newFaultsOccurrences>1?'s':''}</div>`:''}
       <div class="mc-card-stats">
-        <div class="mc-mini"><div class="mc-mini-val" style="color:${openFaults.length>0?'var(--text)':'var(--green)'}">${openFaults.length}</div><div class="mc-mini-lbl">Open faults</div></div>
-        <div class="mc-mini"><div class="mc-mini-val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="mc-mini-lbl">30-day breakdowns</div></div>
+        <div class="mc-mini" style="cursor:pointer" onclick="focusOverviewOpenFaults('${m.id}'); event.stopPropagation();" title="Click to view all open faults for ${m.name}"><div class="mc-mini-val" style="color:${openFaults.length>0?'var(--text)':'var(--green)'}">${openFaults.length}</div><div class="mc-mini-lbl">Open faults</div></div>
+        <div class="mc-mini" style="cursor:pointer" onclick="goToMachineBreakdowns('${m.id}'); event.stopPropagation();" title="Click to view breakdowns for ${m.name}"><div class="mc-mini-val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="mc-mini-lbl">30-day breakdowns</div></div>
       </div>
       <div class="uptime-bar"><div class="uptime-fill" style="width:${upPct}%;background:${upColor}"></div></div>
       <div style="font-size:10px;color:var(--text3);margin-top:5px;font-family:var(--mono)">${upPct}% estimated uptime</div>
@@ -1535,7 +1545,7 @@ function refreshMachinePage(machineId){
       breakdownSubText = `${daysSince} days since last`;
     }
   } else {
-    breakdownSubText = 'No breakdowns ever';
+    breakdownSubText = 'No breakdowns recorded';
   }
   const statusBtns=STATUS_OPTS.map(o=>{const dis=m.status==='breakdown'||(!m.power&&['treatment','qa'].includes(o.id));return`<button class="stat-btn ${o.id===m.status?'current':''}" data-s="${o.id}" ${dis?'disabled style="opacity:0.5;cursor:not-allowed"':''} onclick="requestStatusChange('${machineId}','${o.id}')">${o.label}</button>`}).join('');
   const concessionsHtml=mConcessions.map(c=>{
@@ -1579,8 +1589,8 @@ function refreshMachinePage(machineId){
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px">
       <div class="stat-card"><div class="lbl">Est. Uptime</div><div class="val" style="color:${upPct>90?'var(--green)':upPct>75?'var(--amber)':'var(--red)'}">${upPct}%</div><div class="sub">30-day estimate</div></div>
       <div class="stat-card"><div class="lbl">Downtime</div><div class="val" style="color:var(--amber)">${recentDt.toFixed(2)}h</div><div class="sub">Last 30 days Breakdown</div></div>
-      <div class="stat-card"><div class="lbl">Open Faults</div><div class="val" style="color:${openFaults.length?'var(--red)':'var(--green)'}">${openFaults.length}</div><div class="sub">${recentFaults.length} total faults in last 30 days</div></div>
-      <div class="stat-card"><div class="lbl">Breakdowns</div><div class="val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="sub" style="color:${breakdownSubColor}">${breakdownSubText}</div></div>
+      <div class="stat-card" style="cursor:pointer" onclick="goToMachineOpenFaults('${machineId}')" title="Click to view all open faults"><div class="lbl">Open Faults</div><div class="val" style="color:${openFaults.length?'var(--red)':'var(--green)'}">${openFaults.length}</div><div class="sub">${recentFaults.length} total faults in last 30 days</div></div>
+      <div class="stat-card" style="cursor:pointer" onclick="goToMachineBreakdowns('${machineId}')" title="Click to view breakdown history"><div class="lbl">Breakdowns</div><div class="val" style="color:${bdCount>0?'var(--red)':'var(--green)'}">${bdCount}</div><div class="sub" style="color:${breakdownSubColor}">${breakdownSubText}</div></div>
     </div>
     <div class="tabs">
       <button class="tab active" onclick="switchMTab(this,'mt-log-${machineId}')">Activity Log</button>
@@ -1746,11 +1756,70 @@ function goToMachineFaults(machineId, force = false) {
   }, 50);
 }
 
+function goToMachineOpenFaults(machineId, force = false) {
+  if(!force && !checkStationWarning(machineId, () => goToMachineOpenFaults(machineId, true))) return;
+  showMachine(machineId, true);
+  const pageEl = document.getElementById('page-' + machineId);
+  if (!pageEl) return;
+  
+  const faultTabBtn = pageEl.querySelector(`.tabs .tab[onclick*="'mt-faults-${machineId}'"]`);
+  if (faultTabBtn) switchMTab(faultTabBtn, `mt-faults-${machineId}`);
+  
+  const fCb = document.getElementById(`faultsOpenOnly-${machineId}`);
+  const fHideAckCb = document.getElementById(`faultsHideAck-${machineId}`);
+  const f30Cb = document.getElementById(`faults30DaysOnly-${machineId}`);
+  
+  if (fCb) fCb.checked = true;
+  if (fHideAckCb) fHideAckCb.checked = false;
+  if (f30Cb) f30Cb.checked = false;
+  
+  refreshMachinePage(machineId);
+  setTimeout(() => {
+    const faultPane = document.getElementById(`mt-faults-${machineId}`);
+    if (faultPane) faultPane.scrollIntoView({behavior: 'smooth', block: 'start'});
+  }, 50);
+}
+
+function goToMachineBreakdowns(machineId, force = false) {
+  if(!force && !checkStationWarning(machineId, () => goToMachineBreakdowns(machineId, true))) return;
+  showMachine(machineId, true);
+  const pageEl = document.getElementById('page-' + machineId);
+  if (!pageEl) return;
+  
+  const bdTabBtn = pageEl.querySelector(`.tabs .tab[onclick*="'mt-breakdowns-${machineId}'"]`);
+  if (bdTabBtn) switchMTab(bdTabBtn, `mt-breakdowns-${machineId}`);
+  
+  refreshMachinePage(machineId);
+  setTimeout(() => {
+    const bdPane = document.getElementById(`mt-breakdowns-${machineId}`);
+    if (bdPane) bdPane.scrollIntoView({behavior: 'smooth', block: 'start'});
+  }, 50);
+}
+
 function focusOverviewFaults(machineId) {
   const mSel = document.getElementById('overviewFilterMachine');
   if (mSel) mSel.value = machineId;
   const openCb = document.getElementById('overviewOpenOnly');
   if (openCb) openCb.checked = true;
+  const hideAckCb = document.getElementById('overviewHideAck');
+  if (hideAckCb) hideAckCb.checked = true;
+  
+  if (document.getElementById('overviewFilterCategory')) document.getElementById('overviewFilterCategory').value = '';
+  if (document.getElementById('overviewFilterSeverity')) document.getElementById('overviewFilterSeverity').value = '';
+  if (document.getElementById('overviewFaultSearch')) document.getElementById('overviewFaultSearch').value = '';
+  
+  refreshOverview();
+  const target = document.getElementById('overviewFaultsCard');
+  if (target) target.scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+function focusOverviewOpenFaults(machineId) {
+  const mSel = document.getElementById('overviewFilterMachine');
+  if (mSel) mSel.value = machineId;
+  const openCb = document.getElementById('overviewOpenOnly');
+  if (openCb) openCb.checked = true;
+  const hideAckCb = document.getElementById('overviewHideAck');
+  if (hideAckCb) hideAckCb.checked = false;
   
   if (document.getElementById('overviewFilterCategory')) document.getElementById('overviewFilterCategory').value = '';
   if (document.getElementById('overviewFilterSeverity')) document.getElementById('overviewFilterSeverity').value = '';
@@ -1811,7 +1880,7 @@ function checkStationWarning(targetMachineId, onConfirm) {
   return true;
 }
 
-function showPage(name){
+function showPage(name, skipHistory = false) {
   if(name === 'admin' && state.settings?.admin_pwd_enabled === '1' && !adminAuthenticated){
     document.getElementById('adminAuthPwd').value = '';
     openModal('adminAuthModal');
@@ -1828,6 +1897,10 @@ function showPage(name){
   updateBulkButtons();
   const mainEl = document.querySelector('.main');
   if(mainEl) mainEl.scrollTop = 0;
+  
+  if (!skipHistory) {
+    history.pushState({ type: 'page', id: name }, '', '#' + name);
+  }
 }
 
 function verifyAdminPwd() {
@@ -1836,19 +1909,28 @@ function verifyAdminPwd() {
     adminAuthenticated = true;
     closeModal('adminAuthModal');
     showPage('admin');
+    if (window.location.hash === '#admin' && history.state && history.state.type === 'page' && history.state.id === 'admin') {
+      showPage('admin', true);
+    } else {
+      showPage('admin');
+    }
   } else {
     toast('Incorrect password', 'error');
   }
 }
 
-function showMachine(machineId, force = false){
-  if(!force && !checkStationWarning(machineId, () => showMachine(machineId, true))) return false;
+function showMachine(machineId, force = false, skipHistory = false) {
+  if(!force && !checkStationWarning(machineId, () => showMachine(machineId, true, skipHistory))) return false;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+machineId)?.classList.add('active');
   ['navOverview','navAdmin'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
   currentMachine=machineId;currentPage=machineId;buildBanner();updateBulkButtons();
   const mainEl = document.querySelector('.main');
   if(mainEl) mainEl.scrollTop = 0;
+  
+  if (!skipHistory) {
+    history.pushState({ type: 'machine', id: machineId }, '', '#machine-' + machineId);
+  }
   return true;
 }
 function switchAdminTab(btn,tabId){
@@ -2845,6 +2927,127 @@ function renderUtilTables() {
   }
 }
 
+let monthlySummaryMetric = 'dt'; // 'dt', 'bd', 'faults'
+
+function setMonthlySummaryMetric(metric) {
+  monthlySummaryMetric = metric;
+  renderMonthlySummary();
+}
+
+function renderMonthlySummary() {
+  if (!adminReport || !adminReport.faultsByMonth) return;
+  const faultsByMonth = adminReport.faultsByMonth;
+  const last12Months = adminReport.last12Months;
+  
+  let metricLabel = 'Downtime';
+  let titlePrefix = 'Downtime';
+  if (monthlySummaryMetric === 'bd') {
+    metricLabel = 'Breakdowns';
+    titlePrefix = 'Breakdowns';
+  } else if (monthlySummaryMetric === 'faults') {
+    metricLabel = 'Faults';
+    titlePrefix = 'Faults';
+  }
+
+  let maxMonthVal = 0;
+  last12Months.forEach(mKey => {
+    let val = 0;
+    if (monthlySummaryMetric === 'dt') val = faultsByMonth[mKey].totalDt;
+    else if (monthlySummaryMetric === 'bd') val = faultsByMonth[mKey].totalBd;
+    else val = faultsByMonth[mKey].totalCount;
+    if (val > maxMonthVal) maxMonthVal = val;
+  });
+  if (maxMonthVal === 0) maxMonthVal = 10;
+
+  const W_bar = 800, H_bar = 220, pLb = 40, pRb = 20, pTb = 20, pBb = 30;
+  const wb = W_bar - pLb - pRb, hb = H_bar - pTb - pBb;
+  let svgBar = `<svg viewBox="0 0 ${W_bar} ${H_bar}" style="width:100%;height:auto;max-height:260px;font-family:var(--sans);font-size:11px;background:var(--surface);display:block">`;
+  const ticksB = 4;
+  for (let i = 0; i <= ticksB; i++) {
+      const v = maxMonthVal * (i / ticksB);
+      const y = pTb + hb - (v / maxMonthVal) * hb;
+      svgBar += `<line x1="${pLb}" y1="${y}" x2="${pLb+wb}" y2="${y}" stroke="var(--border)" stroke-dasharray="4" />`;
+      svgBar += `<text x="${pLb-8}" y="${y+4}" text-anchor="end" fill="var(--text3)">${v.toFixed(monthlySummaryMetric==='dt'&&v<=10&&v%1!==0?1:0)}</text>`;
+  }
+  const barW = (wb / last12Months.length) * 0.5;
+  const gapB = (wb / last12Months.length);
+  const colors = ['#1d4ed8', '#0d7f4f', '#b91c1c', '#92560a', '#6d28d9', '#0891b2', '#be123c', '#ea580c', '#4338ca', '#8b5cf6', '#14b8a6', '#f59e0b'];
+  
+  last12Months.forEach((mKey, i) => {
+      const mObj = faultsByMonth[mKey];
+      const x = pLb + gapB * i + (gapB - barW) / 2;
+      let currentY = pTb + hb;
+      let machineIndex = 0;
+      
+      const totalMonthVal = monthlySummaryMetric === 'dt' ? mObj.totalDt : (monthlySummaryMetric === 'bd' ? mObj.totalBd : mObj.totalCount);
+      
+      for (const mach of state.machines.filter(m=>!m.archived)) {
+          let machVal = 0;
+          if (monthlySummaryMetric === 'dt') machVal = mObj.machines[mach.id]?.dt || 0;
+          else if (monthlySummaryMetric === 'bd') machVal = mObj.machines[mach.id]?.bdCount || 0;
+          else machVal = mObj.machines[mach.id]?.count || 0;
+          
+          if (machVal > 0) {
+              const barH = (machVal / maxMonthVal) * hb;
+              const y = currentY - barH;
+              const color = colors[machineIndex % colors.length];
+              const pct = (machVal / totalMonthVal * 100).toFixed(0);
+              const valStr = monthlySummaryMetric === 'dt' ? `${machVal.toFixed(1)}h` : `${machVal}`;
+              svgBar += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${color}"><title>${mach.name} (${mObj.label}): ${pct}% (${valStr})</title></rect>`;
+              if (barH > 14) {
+                  svgBar += `<text x="${x + barW/2}" y="${y + barH/2 + 3}" fill="#fff" font-size="9" text-anchor="middle" font-family="var(--mono)" pointer-events="none">${mach.name}</text>`;
+              }
+              currentY -= barH;
+          }
+          machineIndex++;
+      }
+      svgBar += `<text x="${x + barW/2}" y="${H_bar - 10}" text-anchor="middle" fill="var(--text3)">${mObj.label}</text>`;
+  });
+  svgBar += `</svg>`;
+  
+  let barLegendHtml = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;padding:0 16px;justify-content:center">`;
+  state.machines.filter(m=>!m.archived).forEach((mach, i) => {
+    const color = colors[i % colors.length];
+    barLegendHtml += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${color}"></span><span>${mach.name}</span></div>`;
+  });
+  barLegendHtml += `</div>`;
+  
+  let toggleHtml = `
+    <div style="display:flex;gap:4px;background:var(--bg3);padding:2px;border-radius:var(--radius);border:1px solid var(--border)">
+      <button class="btn btn-sm" style="box-shadow:none;border:none;background:${monthlySummaryMetric==='dt'?'var(--blue)':'transparent'};color:${monthlySummaryMetric==='dt'?'#fff':'var(--text2)'}" onclick="setMonthlySummaryMetric('dt')">Downtime</button>
+      <button class="btn btn-sm" style="box-shadow:none;border:none;background:${monthlySummaryMetric==='bd'?'var(--blue)':'transparent'};color:${monthlySummaryMetric==='bd'?'#fff':'var(--text2)'}" onclick="setMonthlySummaryMetric('bd')">Breakdowns</button>
+      <button class="btn btn-sm" style="box-shadow:none;border:none;background:${monthlySummaryMetric==='faults'?'var(--blue)':'transparent'};color:${monthlySummaryMetric==='faults'?'#fff':'var(--text2)'}" onclick="setMonthlySummaryMetric('faults')">Faults</button>
+    </div>
+  `;
+
+  let monthlyBarChartHtml = `<div class="card" style="flex:2;min-width:450px"><div class="card-head" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center"><span>Monthly Summary (Last 12 Months)</span>${toggleHtml}</div><div class="card-body" style="padding-top:0">${svgBar}${barLegendHtml}</div></div>`;
+  
+  let monthlyTableHtml = `<div class="card" style="flex:1;min-width:250px;padding:0;overflow:hidden;display:flex;flex-direction:column"><div class="card-head" style="padding-bottom:10px;border-bottom:1px solid var(--border)">${titlePrefix} by Month</div><div style="overflow-y:auto;max-height:280px"><table class="tbl"><thead><tr><th>Month</th><th>${metricLabel}</th><th>Days &gt;2h</th></tr></thead><tbody>${[...last12Months].reverse().map(mKey => {
+    const data = faultsByMonth[mKey];
+    let val = 0;
+    let valHtml = '';
+    if (monthlySummaryMetric === 'dt') {
+      val = data.totalDt;
+      let hrs = Math.floor(data.totalDt), mins = Math.round((data.totalDt - hrs) * 60);
+      if (mins === 60) { hrs += 1; mins = 0; }
+      valHtml = `${hrs}h ${mins.toString().padStart(2, '0')}m`;
+    } else if (monthlySummaryMetric === 'bd') {
+      val = data.totalBd;
+      valHtml = `${data.totalBd}`;
+    } else {
+      val = data.totalCount;
+      valHtml = `${data.totalCount}`;
+    }
+    const pct = (val / maxMonthVal) * 100;
+    return `<tr><td style="font-weight:600;font-size:11px">${data.label}</td><td style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--blue);border-radius:3px;transition:width 0.4s ease"></div></div><span style="font-family:var(--mono);font-size:11px;min-width:45px;text-align:right">${valHtml}</span></div></td><td style="font-size:11px">${data.long}</td></tr>`;
+  }).join('') || `<tr><td colspan="3" class="empty">No data recorded</td></tr>`}</tbody></table></div></div>`;
+  
+  let combinedMonthlyHtml = `<div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;align-items:stretch">${monthlyBarChartHtml}${monthlyTableHtml}</div>`;
+
+  const container = document.getElementById('monthlySummaryContainer');
+  if (container) container.innerHTML = combinedMonthlyHtml;
+}
+
 let selectedGraphMachines = { dt: new Set(['total']), faults: new Set(['total']), bd: new Set(['total']) };
 let graphSortState = { dt: { col: 'name', asc: true }, faults: { col: 'name', asc: true }, bd: { col: 'name', asc: true } };
 
@@ -3231,7 +3434,7 @@ async function loadAdminData(){
     d.setMonth(d.getMonth() - i);
     const mKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     last12Months.push(mKey);
-    faultsByMonth[mKey] = { label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), totalDt: 0, long: 0, machines: {} };
+    faultsByMonth[mKey] = { label: d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }), totalDt: 0, totalBd: 0, totalCount: 0, long: 0, machines: {} };
     state.machines.forEach(m => faultsByMonth[mKey].machines[m.id] = { dt: 0, count: 0, bdCount: 0 });
   }
 
@@ -3244,8 +3447,10 @@ async function loadAdminData(){
         faultsByMonth[mKey].machines[f.machine_id] = { dt: 0, count: 0, bdCount: 0 };
       }
       faultsByMonth[mKey].machines[f.machine_id].count += 1;
+      faultsByMonth[mKey].totalCount += 1;
       if (f.severity && (f.severity.includes('High') || f.severity.includes('Critical'))) {
         faultsByMonth[mKey].machines[f.machine_id].bdCount += 1;
+        faultsByMonth[mKey].totalBd += 1;
       }
       if (f.downtime_hrs !== null && f.downtime_hrs !== undefined) {
         faultsByMonth[mKey].totalDt += f.downtime_hrs;
@@ -3259,68 +3464,14 @@ async function loadAdminData(){
   const sortedMonths = last12Months;
   const monthLabels = sortedMonths.map(mKey => faultsByMonth[mKey].label);
 
-  let maxMonthDt = Math.max(...last12Months.map(mKey => faultsByMonth[mKey].totalDt));
-  if (maxMonthDt === 0) maxMonthDt = 10;
-  const W_bar = 800, H_bar = 220, pLb = 40, pRb = 20, pTb = 20, pBb = 30;
-  const wb = W_bar - pLb - pRb, hb = H_bar - pTb - pBb;
-  let svgBar = `<svg viewBox="0 0 ${W_bar} ${H_bar}" style="width:100%;height:auto;max-height:260px;font-family:var(--sans);font-size:11px;background:var(--surface);display:block">`;
-  const ticksB = 4;
-  for (let i = 0; i <= ticksB; i++) {
-      const v = maxMonthDt * (i / ticksB);
-      const y = pTb + hb - (v / maxMonthDt) * hb;
-      svgBar += `<line x1="${pLb}" y1="${y}" x2="${pLb+wb}" y2="${y}" stroke="var(--border)" stroke-dasharray="4" />`;
-      svgBar += `<text x="${pLb-8}" y="${y+4}" text-anchor="end" fill="var(--text3)">${v.toFixed(v<=10?1:0)}</text>`;
-  }
-  const barW = (wb / last12Months.length) * 0.5;
-  const gapB = (wb / last12Months.length);
-  const colors = ['#1d4ed8', '#0d7f4f', '#b91c1c', '#92560a', '#6d28d9', '#0891b2', '#be123c', '#ea580c', '#4338ca', '#8b5cf6', '#14b8a6', '#f59e0b'];
-  last12Months.forEach((mKey, i) => {
-      const mObj = faultsByMonth[mKey];
-      const x = pLb + gapB * i + (gapB - barW) / 2;
-      let currentY = pTb + hb;
-      let machineIndex = 0;
-      for (const mach of state.machines.filter(m=>!m.archived)) {
-          const machDt = mObj.machines[mach.id]?.dt || 0;
-          if (machDt > 0) {
-              const barH = (machDt / maxMonthDt) * hb;
-              const y = currentY - barH;
-              const color = colors[machineIndex % colors.length];
-              const pct = (machDt / mObj.totalDt * 100).toFixed(0);
-              svgBar += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${color}"><title>${mach.name} (${mObj.label}): ${pct}% (${machDt.toFixed(1)}h)</title></rect>`;
-              if (barH > 14) {
-                  svgBar += `<text x="${x + barW/2}" y="${y + barH/2 + 3}" fill="#fff" font-size="9" text-anchor="middle" font-family="var(--mono)" pointer-events="none">${mach.name}</text>`;
-              }
-              currentY -= barH;
-          }
-          machineIndex++;
-      }
-      svgBar += `<text x="${x + barW/2}" y="${H_bar - 10}" text-anchor="middle" fill="var(--text3)">${mObj.label}</text>`;
-  });
-  svgBar += `</svg>`;
-  let barLegendHtml = `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px;padding:0 16px;justify-content:center">`;
-  state.machines.filter(m=>!m.archived).forEach((mach, i) => {
-    const color = colors[i % colors.length];
-    barLegendHtml += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${color}"></span><span>${mach.name}</span></div>`;
-  });
-  barLegendHtml += `</div>`;
-  let monthlyBarChartHtml = `<div class="card" style="flex:2;min-width:450px"><div class="card-head" style="margin-bottom:12px">Monthly Downtime Summary (Last 12 Months)</div><div class="card-body" style="padding-top:0">${svgBar}${barLegendHtml}</div></div>`;
-  
-  let monthlyTableHtml = `<div class="card" style="flex:1;min-width:250px;padding:0;overflow:hidden;display:flex;flex-direction:column"><div class="card-head" style="padding-bottom:10px;border-bottom:1px solid var(--border)">Breakdowns by Month</div><div style="overflow-y:auto;max-height:280px"><table class="tbl"><thead><tr><th>Month</th><th>Downtime</th><th>Days &gt;2h</th></tr></thead><tbody>${[...last12Months].reverse().map(mKey => {
-    const data = faultsByMonth[mKey];
-    let hrs = Math.floor(data.totalDt), mins = Math.round((data.totalDt - hrs) * 60);
-    if (mins === 60) { hrs += 1; mins = 0; }
-    return `<tr><td style="font-weight:600;font-size:11px">${data.label}</td><td style="font-family:var(--mono);font-size:11px">${hrs}h ${mins.toString().padStart(2, '0')}m</td><td style="font-size:11px">${data.long}</td></tr>`;
-  }).join('') || '<tr><td colspan="3" class="empty">No downtime recorded</td></tr>'}</tbody></table></div></div>`;
-  
-  let combinedMonthlyHtml = `<div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;align-items:stretch">${monthlyBarChartHtml}${monthlyTableHtml}</div>`;
-
   adminReport.last12Months = sortedMonths;
   adminReport.faultsByMonth = faultsByMonth;
   const timeChartsHtml = renderTimeAnalysisCharts();
-  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">Days &gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + timeChartsHtml + combinedMonthlyHtml + `<div id="interactiveGraphs"></div>`;
+  document.getElementById('adminDowntime').innerHTML=`<div class="card" style="padding:0;overflow:hidden;margin-bottom:16px"><table class="tbl"><thead><tr><th style="cursor:pointer;user-select:none" onclick="sortDt('name')" title="Sort">Machine &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('downtime_hrs')" title="Sort">Downtime (h) &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('fault_count')" title="Sort">Faults &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('breakdown_count')" title="Sort">Breakdowns &#8597;</th><th style="cursor:pointer;user-select:none" onclick="sortDt('long_faults')" title="Sort">Days &gt;2h &#8597;</th></tr></thead><tbody id="dtTbody"></tbody></table></div><div id="categoryCharts" style="margin-bottom:16px"></div>` + timeChartsHtml + `<div id="monthlySummaryContainer"></div><div id="interactiveGraphs"></div>`;
   renderInteractiveGraphs();
   renderCategoryCharts();
   renderDtTable();
+  renderMonthlySummary();
   
   const totalWorkingHours = getTotalWorkingHours(parseInt(adminReport.period_days));
   const displayPeriodLabel = adminReport.period_days === 1 ? 'Last 24 Hours' : adminReport.period_label;
@@ -3664,6 +3815,34 @@ function saveDefaultStation() {
     document.getElementById('localStationBtn').textContent = 'Set Station';
     toast('Default station cleared', 'info');
     showPage('overview');
+  }
+}
+
+window.addEventListener('popstate', (e) => {
+  if (e.state) {
+    if (e.state.type === 'page') {
+      showPage(e.state.id, true);
+    } else if (e.state.type === 'machine') {
+      showMachine(e.state.id, true, true);
+    }
+  } else {
+    handleHashOnLoad();
+  }
+});
+
+function handleHashOnLoad() {
+  const hash = window.location.hash.substring(1);
+  if (hash.startsWith('machine-')) {
+    const mId = hash.substring(8);
+    if (state.machines.find(m => m.id === mId)) {
+        showMachine(mId, true, true);
+    } else {
+        showPage('overview', true);
+    }
+  } else if (hash === 'admin') {
+    showPage('admin', true);
+  } else {
+    showPage('overview', true);
   }
 }
 

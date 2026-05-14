@@ -1,3 +1,13 @@
+-v1.37
+    -Updated - Navigation changes, back button etc.
+    -Updated - Admin graphs
+-v1.36
+    -Added - Alert function and alert toggle on overview page
+    -Added - Days since last occurrence
+    -Added - Time of last occurrence
+    -Fixed - Missing fault resolution details
+-v1.35
+    -Added - Reoccurring fault input/display
 -v1.34
     -Updated - Direct access to active faults from overview page, added count
     -Updated - Changes to colouring of faults/restrictions/concessions
