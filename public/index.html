@@ -789,7 +789,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div class="modal-head" style="justify-content:flex-end;margin-bottom:10px"><button class="modal-close" onclick="closeModal('aboutModal')">&#10005;</button></div>
     <div style="text-align:center;padding:0 0 20px">
       <img src="Gemini_Generated_Image_etl97retl97retl9.png" alt="LiveViewRT Splash" style="width:100%; max-width:300px; height:auto; border-radius:var(--radius-lg); margin-bottom:16px; box-shadow:var(--shadow)">
-      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.37</p>
+      <p style="font-size:14px;color:var(--text2);margin-bottom:4px">Version 1.38</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:4px">James Burnley</p>
       <p style="font-size:13px;color:var(--text3);margin-bottom:20px">April 2026</p>
 
@@ -927,6 +927,17 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:14
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
       <button class="btn" onclick="closeModal('stationModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveDefaultStation()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- CATEGORY HISTORY MODAL -->
+<div class="modal-overlay" id="categoryHistoryModal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-head"><h2 id="catHistTitle">Category History</h2><div id="catHistControls" style="margin-left:auto;margin-right:16px"></div><button class="modal-close" onclick="closeModal('categoryHistoryModal')">&#10005;</button></div>
+    <div id="catHistContent" style="max-height:60vh;overflow-y:auto;padding-right:8px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeModal('categoryHistoryModal')">Close</button>
     </div>
   </div>
 </div>
@@ -1681,7 +1692,7 @@ function faultRowHTML(f,showMachine){
   }
 
   const machHtml = showMachine ? (canFilter ? `<span class="tag" style="cursor:pointer" onclick="quickFilterFaults('faultFilterMachine', '${f.machine_id}'); event.stopPropagation();" title="Click to filter by this machine">${f.machine_name||f.machine_id}</span> &nbsp;` : `<span class="tag">${f.machine_name||f.machine_id}</span> &nbsp;`) : '';
-  const catHtml = canFilter ? `<span style="cursor:pointer" onclick="quickFilterFaults('faultFilterCategory', '${f.category.replace(/'/g, "\\'")}'); event.stopPropagation();" title="Click to filter by this category">${f.category}</span>` : `<span>${f.category}</span>`;
+  const catHtml = `<span style="cursor:pointer" onclick="showCategoryHistory('${f.machine_id}', '${f.category.replace(/'/g, "\\'")}'); event.stopPropagation();" title="Click to view history of this category">${f.category}</span>`;
   const sevHtml = canFilter ? `<span style="cursor:pointer;color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px" onclick="quickFilterFaults('faultFilterSeverity', '${f.severity.replace(/'/g, "\\'")}'); event.stopPropagation();" title="Click to filter by this severity">${f.severity}</span>` : `<span style="color:${sevColor};font-size:10px;font-family:var(--mono);margin-left:6px">${f.severity}</span>`;
 
   return`<div class="fault-row" style="align-items:center">
@@ -1703,6 +1714,94 @@ function faultRowHTML(f,showMachine){
       ${showMachine?`<button class="btn btn-danger btn-sm" style="padding:2px 6px" onclick="deleteFaultRecord(${f.id}, '${idsStr}')" title="Delete Fault">&#10005;</button>`:''}
     </div>
   </div>`;
+}
+
+function showCategoryHistory(machineId, category, days = 30) {
+  const m = state.machines.find(x => x.id === machineId);
+  const mName = m ? m.name : machineId;
+  document.getElementById('catHistTitle').textContent = `${category} History - ${mName}`;
+  
+  document.getElementById('catHistControls').innerHTML = `
+    <div style="display:flex;gap:4px;background:var(--bg3);padding:2px;border-radius:var(--radius);border:1px solid var(--border)">
+      <button class="btn btn-sm" style="box-shadow:none;border:none;background:${days===30?'var(--blue)':'transparent'};color:${days===30?'#fff':'var(--text2)'}" onclick="showCategoryHistory('${machineId}', '${category.replace(/'/g, "\\'")}', 30)">30 Days</button>
+      <button class="btn btn-sm" style="box-shadow:none;border:none;background:${days===365?'var(--blue)':'transparent'};color:${days===365?'#fff':'var(--text2)'}" onclick="showCategoryHistory('${machineId}', '${category.replace(/'/g, "\\'")}', 365)">12 Months</button>
+    </div>
+  `;
+  
+  const timeAgo = new Date();
+  if (days === 365) { timeAgo.setMonth(timeAgo.getMonth() - 12); }
+  else { timeAgo.setDate(timeAgo.getDate() - 30); }
+  
+  let histFaults = state.faults.filter(f => f.machine_id === machineId && f.category === category && new Date((f.created_at||'').replace(' ','T')+'Z') >= timeAgo);
+  
+  histFaults.sort((a,b) => new Date((b.created_at||'').replace(' ','T')+'Z') - new Date((a.created_at||'').replace(' ','T')+'Z'));
+  
+  let html = '';
+  if (histFaults.length === 0) {
+    html = `<div class="empty">No occurrences in the last ${days === 30 ? '30 days' : '12 months'}</div>`;
+  } else {
+    const now = new Date();
+    const W = 500, H = 100, pL = 20, pR = 20, pT = 20, pB = 20;
+    const w = W - pL - pR, h = H - pT - pB;
+    let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:var(--surface);margin-bottom:16px;border:1px solid var(--border);border-radius:var(--radius-lg)">`;
+    svg += `<line x1="${pL}" y1="${H/2}" x2="${W-pR}" y2="${H/2}" stroke="var(--border2)" stroke-width="2" />`;
+    if (days === 365) {
+      for(let i=0; i<=12; i++) {
+        const x = pL + (i/12)*w;
+        svg += `<line x1="${x}" y1="${H/2-4}" x2="${x}" y2="${H/2+4}" stroke="var(--border2)" stroke-width="2" />`;
+        if(i%3===0) {
+          const d = new Date(now);
+          d.setMonth(d.getMonth() - (12-i));
+          const lbl = d.toLocaleDateString('en-GB', {month:'short', year:'2-digit'});
+          svg += `<text x="${x}" y="${H/2+18}" text-anchor="middle" fill="var(--text3)" font-size="10">${lbl}</text>`;
+        }
+      }
+    } else {
+      const ticks = 6;
+      for(let i=0; i<=ticks; i++) {
+        const x = pL + (i/ticks)*w;
+        svg += `<line x1="${x}" y1="${H/2-4}" x2="${x}" y2="${H/2+4}" stroke="var(--border2)" stroke-width="2" />`;
+        const d = new Date(now);
+        d.setDate(d.getDate() - (30 - (i * (30/ticks))));
+        const lbl = d.toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+        svg += `<text x="${x}" y="${H/2+18}" text-anchor="middle" fill="var(--text3)" font-size="10">${lbl}</text>`;
+      }
+    }
+    const minTime = timeAgo.getTime();
+    const maxTime = now.getTime();
+    const range = maxTime - minTime;
+    
+    histFaults.forEach(f => {
+      const fTime = new Date((f.created_at||'').replace(' ','T')+'Z').getTime();
+      if(fTime >= minTime && fTime <= maxTime) {
+        const x = pL + ((fTime - minTime) / range) * w;
+        const isBd = f.severity.includes('High') || f.severity.includes('Critical');
+        const color = isBd ? 'var(--red)' : (f.severity.includes('Medium') ? 'var(--amber)' : 'var(--blue)');
+        const yOffset = isBd ? -10 : (f.severity.includes('Medium') ? 0 : 10);
+        svg += `<circle cx="${x}" cy="${H/2 + yOffset}" r="4" fill="${color}" opacity="0.7"><title>${fmtDT(f.created_at)} - ${f.severity}</title></circle>`;
+      }
+    });
+    svg += `</svg>`;
+    
+    html = svg + `<table class="tbl" style="margin:0">
+      <thead><tr><th>Date</th><th>Severity</th><th>Description</th><th>Reported By</th></tr></thead>
+      <tbody>
+        ${histFaults.map(f => {
+          const sevColor = f.severity.includes('High') || f.severity.includes('Critical') ? 'var(--red)' : f.severity.includes('Medium') ? 'var(--amber)' : 'var(--blue)';
+          const descClean = f.description.replace(/\[RECURRENCE\]\s*/g, '').trim();
+          return `<tr>
+            <td style="font-family:var(--mono);font-size:11px;white-space:nowrap">${fmtDT(f.created_at)}</td>
+            <td style="color:${sevColor};font-family:var(--mono);font-size:11px">${f.severity}</td>
+            <td style="color:var(--text2);font-size:12px;line-height:1.4">${descClean}</td>
+            <td style="font-size:11px">${f.user_name}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  }
+  
+  document.getElementById('catHistContent').innerHTML = html;
+  openModal('categoryHistoryModal');
 }
 
 function quickFilterFaults(field, value) {
@@ -2246,7 +2345,6 @@ async function submitBulkAcknowledge() {
         });
       }
       return api('PATCH', `/faults/${id}/close`, { closed_by: user, notes: 'Fully closed via bulk action.' });
-      return api('PATCH', `/faults/${id}/close`, { closed_by: user, notes: '' });
     }));
     toast(`${ids.length} fault(s) closed.`, 'success'); closeModal('bulkAcknowledgeModal');
   }
@@ -3137,28 +3235,39 @@ function buildInteractiveSection(type, title) {
   return `<div class="card" style="margin-top:16px"><div class="card-head" style="margin-bottom:12px">${title}</div><div class="card-body" style="overflow-x:auto; padding-top:0">${tableHtml}${graphHtml}</div></div>`;
 }
 
-function makeInteractiveLineGraph(seriesData, monthLabels) {
+function makeInteractiveLineGraph(seriesData, monthLabels, customH = 220, customMaxH = 260, hideBorder = false) {
   if (seriesData.length === 0) return `<div class="empty" style="border:1px dashed var(--border); border-radius:var(--radius); padding:20px; background:var(--bg3)">Click on a machine row above to plot its data.</div>`;
-  const W = 800, H = 220, pL = 40, pR = 140, pT = 20, pB = 30, w = W - pL - pR, h = H - pT - pB;
+  const W = 800, H = customH, pL = 40, pR = 140, pT = 20, pB = 30, w = W - pL - pR, h = H - pT - pB;
   let maxVal = 0;
   seriesData.forEach(s => s.values.forEach(v => { if (v > maxVal) maxVal = v; }));
   if (maxVal === 0) maxVal = 1;
   const getX = (i) => monthLabels.length === 1 ? pL + w/2 : pL + (i / (monthLabels.length - 1)) * w;
   const getY = (v) => pT + h - (v / maxVal) * h;
-  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:260px;font-family:var(--sans);font-size:11px;background:var(--surface);display:block; overflow:visible">`;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:${customMaxH}px;font-family:var(--sans);font-size:13px;background:var(--surface);display:block; overflow:visible">`;
   for (let i = 0; i <= 4; i++) { const v = maxVal * (i / 4); const y = getY(v); svg += `<line x1="${pL}" y1="${y}" x2="${pL+w}" y2="${y}" stroke="var(--border)" stroke-dasharray="4" /><text x="${pL-8}" y="${y+4}" text-anchor="end" fill="var(--text3)">${v.toFixed(v<=10&&v%1!==0?1:0)}</text>`; }
   monthLabels.forEach((lbl, i) => { svg += `<text x="${getX(i)}" y="${H - 5}" text-anchor="middle" fill="var(--text3)">${lbl}</text>` });
   let legendHtml = `<div style="position:absolute;right:16px;top:20px;display:flex;flex-direction:column;gap:8px;max-height:180px;overflow-y:auto;padding-right:8px">`;
   seriesData.forEach(s => {
     let d = ''; s.values.forEach((v, i) => { const x = getX(i), y = getY(v); d += `${i === 0 ? 'M' : 'L'} ${x} ${y} `; svg += `<circle cx="${x}" cy="${y}" r="3.5" fill="${s.color}" />` });
     svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" />`;
-    legendHtml += `<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:${s.color}"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</span></div>`;
+    legendHtml += `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)"><span style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:${s.color}"></span><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</span></div>`;
   });
-  return `<div style="position:relative; margin-top:20px; border-top:1px solid var(--border); padding-top:20px">${svg}${legendHtml}</div>`;
+  const borderStyle = hideBorder ? '' : 'margin-top:20px; border-top:1px solid var(--border); padding-top:20px';
+  return `<div style="position:relative; ${borderStyle}">${svg}${legendHtml}</div>`;
 }
 
 let catChartMachines = new Set(['all']);
 let catChartType = 'bd';
+let catChartSelectedCategory = 'all';
+
+function setCatChartCategory(cat) {
+  if (catChartSelectedCategory === cat) {
+    catChartSelectedCategory = 'all';
+  } else {
+    catChartSelectedCategory = cat;
+  }
+  updateCatChart();
+}
 
 function renderCategoryCharts() {
   const container = document.getElementById('categoryCharts');
@@ -3227,6 +3336,109 @@ function toggleCatChartMachine(mId) {
   updateCatChart();
 }
 
+function makeCatFaultsTimePlot(faults, category, catColors) {
+  let plotFaults = faults;
+  if (category !== 'all') {
+    plotFaults = faults.filter(f => f.category === category);
+  }
+
+  if (plotFaults.length === 0) return `<div class="empty">No faults to display in timeline</div>`;
+
+  const reportDays = document.getElementById('reportDays').value;
+  const isHours = reportDays === '1';
+  const isDays = ['7', '30', '90'].includes(reportDays) || (!isHours && adminReport.period_days <= 90);
+  
+  const labels = [];
+  const keys = [];
+  const fbm = {};
+  const now = new Date();
+  
+  if (isHours) {
+    for (let i = 24; i >= 0; i--) {
+      const d = new Date(now);
+      d.setHours(d.getHours() - i);
+      const key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
+      keys.push(key);
+      labels.push(d.getHours() + ':00');
+      fbm[key] = 0;
+    }
+  } else if (isDays) {
+    const days = parseInt(reportDays) || adminReport.period_days || 30;
+    for (let i = days; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+      keys.push(key);
+      labels.push(d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }));
+      fbm[key] = 0;
+    }
+  } else {
+    let months = reportDays === '365' ? 12 : (adminReport.period_days ? Math.ceil(adminReport.period_days / 30) : 12);
+    if (months > 60) months = 60;
+    for (let i = months; i >= 0; i--) {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - i);
+      const key = d.getFullYear() + '-' + d.getMonth();
+      keys.push(key);
+      labels.push(d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' }));
+      fbm[key] = 0;
+    }
+  }
+
+  plotFaults.forEach(f => {
+    const d = new Date((f.created_at || '').replace(' ', 'T') + 'Z');
+    if (!isNaN(d.getTime())) {
+      let key = '';
+      if (isHours) {
+        key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours();
+      } else if (isDays) {
+        key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+      } else {
+        key = d.getFullYear() + '-' + d.getMonth();
+      }
+      if (fbm[key] !== undefined) {
+        fbm[key]++;
+      } else if (keys.length > 0) {
+        if (d.getTime() < now.getTime()) fbm[keys[0]]++;
+        else fbm[keys[keys.length - 1]]++;
+      }
+    }
+  });
+
+  const dataArr = keys.map(k => fbm[k]);
+  const color = category === 'all' ? 'var(--blue)' : (catColors[category] || 'var(--blue)');
+
+  let maxVal = Math.max(...dataArr, 5);
+  const W = 800, H = 280, pL = 30, pR = 15, pT = 20, pB = 60;
+  const w = W - pL - pR, h = H - pT - pB;
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;max-height:320px;font-family:var(--sans);font-size:10px;display:block;overflow:visible">`;
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i++) { 
+    const v = maxVal * (i / ticks); 
+    const y = pT + h - (v / maxVal) * h; 
+    svg += `<line x1="${pL}" y1="${y}" x2="${pL+w}" y2="${y}" stroke="var(--border)" stroke-dasharray="3" />
+            <text x="${pL-6}" y="${y+3}" text-anchor="end" fill="var(--text3)">${v.toFixed(0)}</text>`; 
+  }
+  const barTotalW = w / dataArr.length;
+  const barW = Math.min(barTotalW * 0.8, 40);
+  dataArr.forEach((val, i) => {
+    const x = pL + (i * barTotalW) + (barTotalW - barW)/2;
+    const barH = (val / maxVal) * h;
+    const y = pT + h - barH;
+    if (val > 0) { 
+      svg += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${color}" rx="2" ry="2"><title>${labels[i]}: ${val} faults</title></rect>
+              <text x="${x + barW/2}" y="${y - 4}" text-anchor="middle" fill="var(--text2)" font-size="10">${val}</text>`; 
+    }
+    const labelStep = Math.ceil(dataArr.length / 15);
+    if (i % labelStep === 0 || i === dataArr.length - 1) {
+      svg += `<text x="${x + barW/2}" y="${H - 45}" text-anchor="end" transform="rotate(-45 ${x + barW/2} ${H - 45})" fill="var(--text3)" font-size="11">${labels[i]}</text>`;
+    }
+  });
+  svg += `</svg>`;
+  
+  return `<div style="width:100%">${svg}</div>`;
+}
+
 function updateCatChart() {
   const body = document.getElementById('catChartBody');
   if(!body || !adminReport) return;
@@ -3258,20 +3470,23 @@ function updateCatChart() {
     }
   });
   const codeData = Object.keys(codeTally).map((k, i) => ({ label: k, value: codeTally[k], color: colors[i % colors.length] })).filter(d => d.value > 0);
+  const timePlotHtml = makeCatFaultsTimePlot(faults, catChartSelectedCategory, catColors);
 
   body.innerHTML = `
-    <div style="flex:1; min-width: 400px;">
+    <div style="flex:1; min-width: 350px;">
       <h3 style="text-align:center; font-size:12px; color:var(--text3); font-weight:500; margin-bottom:16px;">Breakdown by Category</h3>
-      ${makeDonutChart(catData)}
+      ${makeDonutChart(catData, 'setCatChartCategory', true)}
     </div>
-    <div style="flex:1; min-width: 400px;">
-      <h3 style="text-align:center; font-size:12px; color:var(--text3); font-weight:500; margin-bottom:16px;">Breakdown by Fault Code</h3>
-      ${makeDonutChart(codeData)}
+    <div style="flex:1.5; min-width: 400px; display:flex; flex-direction:column;">
+      <h3 style="text-align:center; font-size:12px; color:var(--text3); font-weight:500; margin-bottom:16px;">Faults Over Time ${catChartSelectedCategory === 'all' ? '(All Categories)' : '(' + catChartSelectedCategory + ')'}</h3>
+      <div style="flex:1; display:flex; align-items:center; justify-content:center;">
+        ${timePlotHtml}
+      </div>
     </div>
   `;
 }
 
-function makeDonutChart(data) {
+function makeDonutChart(data, onLegendClickFnName, showAllOption = false) {
   if (!data || data.length === 0) return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;color:var(--text3);font-size:12px;text-align:center"><div style="opacity:0.6">No data recorded for this selection</div></div>`;
   const total = data.reduce((s, d) => s + d.value, 0);
   let svg = `<svg viewBox="0 0 36 36" style="width:100%;height:auto;max-width:280px;display:block;margin:0 auto;transform:rotate(-90deg);overflow:visible">`;
@@ -3280,10 +3495,23 @@ function makeDonutChart(data) {
     const pct = (d.value / total) * 100, strokeDash = pct === 100 ? '100 0' : `${pct} ${100 - pct}`;
     svg += `<circle cx="18" cy="18" r="15.9155" fill="none" stroke="${d.color}" stroke-width="4" stroke-dasharray="${strokeDash}" stroke-dashoffset="${offset}"><title>${d.label}: ${d.value} (${pct.toFixed(0)}%)</title></circle>`;
     offset -= pct;
-    legend += `<div style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.3"><span style="width:14px;height:14px;border-radius:3px;background:${d.color};flex-shrink:0"></span><span style="flex:1;word-break:break-word" title="${d.label}">${d.label}</span><span style="font-size:14px;font-weight:600;font-family:var(--mono);color:var(--text)">${d.value}</span></div>`;
+    let activeStyle = '';
+    if (onLegendClickFnName && typeof catChartSelectedCategory !== 'undefined' && catChartSelectedCategory === d.label) {
+       activeStyle = 'background:var(--bg3);border-radius:4px;outline:1px solid var(--border);';
+    }
+    const onClickAttr = onLegendClickFnName ? `onclick="${onLegendClickFnName}('${d.label.replace(/'/g, "\\'")}')"` : '';
+    legend += `<div style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text2);margin-bottom:8px;line-height:1.3;cursor:${onLegendClickFnName?'pointer':'default'};padding:4px 6px;${activeStyle}" ${onClickAttr} title="${onLegendClickFnName?'Click to filter timeline':''}"><span style="width:14px;height:14px;border-radius:3px;background:${d.color};flex-shrink:0"></span><span style="flex:1;word-break:break-word" title="${d.label}">${d.label}</span><span style="font-size:14px;font-weight:600;font-family:var(--mono);color:var(--text)">${d.value}</span></div>`;
   });
+  if (showAllOption) {
+    let activeStyle = '';
+    if (onLegendClickFnName && typeof catChartSelectedCategory !== 'undefined' && catChartSelectedCategory === 'all') {
+       activeStyle = 'background:var(--bg3);border-radius:4px;outline:1px solid var(--border);';
+    }
+    const onClickAttr = onLegendClickFnName ? `onclick="${onLegendClickFnName}('all')"` : '';
+    legend += `<div style="display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text2);margin-top:4px;padding:8px 6px 4px;border-top:1px dashed var(--border);line-height:1.3;cursor:${onLegendClickFnName?'pointer':'default'};${activeStyle}" ${onClickAttr} title="${onLegendClickFnName?'Click to view all categories over time':''}"><span style="width:14px;height:14px;border-radius:3px;background:transparent;border:1px dashed var(--border2);flex-shrink:0" title="Not displayed in donut chart"></span><span style="flex:1;word-break:break-word" title="All Categories"><em>All Categories</em></span><span style="font-size:14px;font-weight:600;font-family:var(--mono);color:var(--text)">${total}</span></div>`;
+  }
   svg += `</svg>`;
-  return `<div style="display:flex;align-items:center;justify-content:center;gap:60px;width:100%;max-width:800px;margin:0 auto;flex-wrap:wrap"><div style="flex:1;min-width:200px;display:flex;justify-content:center">${svg}</div><div style="flex:1.5;min-width:220px;max-height:280px;overflow-y:auto;padding-right:12px">${legend}</div></div>`;
+  return `<div style="display:flex;align-items:center;justify-content:center;gap:30px;width:100%;flex-wrap:wrap"><div style="flex:1;min-width:180px;display:flex;justify-content:center">${svg}</div><div style="flex:1;min-width:200px;max-height:280px;overflow-y:auto;padding-right:12px">${legend}</div></div>`;
 }
 
 function renderTimeAnalysisCharts() {
@@ -3879,6 +4107,7 @@ document.addEventListener('keydown', e => {
       else if (openM.id === 'restoreModal') confirmRestore();
       else if (openM.id === 'aboutModal') closeModal('aboutModal');
       else if (openM.id === 'updateModal' && document.getElementById('updatePwd').value) confirmUpdate();
+      else if (openM.id === 'categoryHistoryModal') closeModal('categoryHistoryModal');
     }
   }
 });
