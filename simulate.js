@@ -21,6 +21,7 @@ const FAULT_DESCRIPTIONS = [
     'KV source is failing to warm up correctly.'
 ];
 const FAULT_CODES = ['E101', 'E202', 'W300', 'F404', 'INT01', 'MOT02', 'RAD03', 'SYS05', 'COM09'];
+const CONCESSION_TYPES = ['Clinical Release', 'Physics Concession', 'Engineering Bypass', 'Software Override'];
 
 // --- CUSTOM QUERIES FOR TIME TRAVEL ---
 const simQueries = {
@@ -30,7 +31,9 @@ const simQueries = {
     insertAudit: db.prepare(`INSERT INTO audit_trail (machine_id, user_name, action, detail, ip_address, created_at) VALUES (@machine_id, @user_name, @action, @detail, @ip_address, @created_at)`),
     insertActivity: db.prepare(`INSERT INTO activity_log (machine_id, user_name, user_role, activity, notes, created_at) VALUES (@machine_id, @user_name, @user_role, @activity, @notes, @created_at)`),
     insertFault: db.prepare(`INSERT INTO faults (machine_id, user_name, user_role, category, severity, description, screenshot_taken, fault_codes, created_at) VALUES (@machine_id, @user_name, @user_role, @category, @severity, @description, @screenshot_taken, @fault_codes, @created_at)`),
-    resolveFault: db.prepare(`UPDATE faults SET status='resolved', resolved_by=@resolved_by, resolved_at=@resolved_at, downtime_hrs=@downtime_hrs WHERE id=@id`)
+    resolveFault: db.prepare(`UPDATE faults SET status='resolved', resolved_by=@resolved_by, resolved_at=@resolved_at, downtime_hrs=@downtime_hrs WHERE id=@id`),
+    insertConcession: db.prepare(`INSERT INTO concessions (machine_id, type, description, user_name, review_by, active, created_at) VALUES (@machine_id, @type, @description, @user_name, @review_by, @active, @created_at)`),
+    resolveConcession: db.prepare(`UPDATE concessions SET active=0 WHERE id=@id`)
 };
 
 // Helper to pick a random item from an array
@@ -88,11 +91,20 @@ function runSimulationTick(simTime) {
             continue; 
         }
 
+        // --- Resolve Concessions ---
+        const activeConcessions = db.prepare('SELECT * FROM concessions WHERE machine_id = ? AND active = 1').all(machine.id);
+        if (activeConcessions.length > 0 && diceRoll < 0.05) {
+            resolveConcession(randomItem(activeConcessions), user, sqlTime);
+            continue;
+        }
+
         // --- Generate New Events ---
         if (diceRoll < 0.0005) { // ~9 breakdowns a year per machine
             reportBreakdown(machine, user, role, sqlTime);
         } else if (diceRoll < 0.002) { // ~37 faults a year per machine
             reportFault(machine, user, role, sqlTime);
+        } else if (diceRoll < 0.003) { // ~18 concessions a year per machine
+            addConcession(machine, user, sqlTime);
         } else if (diceRoll < 0.01) { // ~1 power toggle a day per machine
             togglePower(machine, user, sqlTime);
         } else if (diceRoll < 0.1) { // ~5 status changes a day per machine
@@ -156,6 +168,7 @@ function changeStatus(machine, user, sqlTime) {
 function reportFault(machine, user, role, sqlTime) {
     const severity = randomItem(['Low', 'Medium']);
     const hasScreenshot = Math.random() < 0.3 ? 1 : 0;
+    const isRecurring = Math.random() < 0.15 ? 1 : 0; // ~15% chance of being recurring
     let faultCodes = null;
     if (Math.random() < 0.4) {
         const numCodes = Math.floor(Math.random() * 3) + 1;
@@ -164,9 +177,11 @@ function reportFault(machine, user, role, sqlTime) {
         faultCodes = JSON.stringify([...new Set(codes)]);
     }
 
-    simQueries.insertFault.run({ machine_id: machine.id, user_name: user, user_role: role, category: randomItem(FAULT_CATEGORIES), severity: severity, description: randomItem(FAULT_DESCRIPTIONS), screenshot_taken: hasScreenshot, fault_codes: faultCodes, created_at: sqlTime });
-    simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'FAULT_REPORTED', detail: `Simulated: [${severity}] fault`, ip_address: '127.0.0.1', created_at: sqlTime });
-    simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: role, activity: 'Fault reported', notes: `[${severity}] fault (simulated)`, created_at: sqlTime });
+    const description = randomItem(FAULT_DESCRIPTIONS) + (isRecurring ? ' (Recurring)' : '');
+
+    simQueries.insertFault.run({ machine_id: machine.id, user_name: user, user_role: role, category: randomItem(FAULT_CATEGORIES), severity: severity, description: description, screenshot_taken: hasScreenshot, fault_codes: faultCodes, created_at: sqlTime });
+    simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'FAULT_REPORTED', detail: `Simulated: [${severity}] fault${isRecurring ? ' (Recurring)' : ''}`, ip_address: '127.0.0.1', created_at: sqlTime });
+    simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: role, activity: 'Fault reported', notes: `[${severity}] fault (simulated)${isRecurring ? ' (Recurring)' : ''}`, created_at: sqlTime });
 }
 
 function reportBreakdown(machine, user, role, sqlTime) {
@@ -174,6 +189,7 @@ function reportBreakdown(machine, user, role, sqlTime) {
 
     const newStatus = 'breakdown';
     const hasScreenshot = Math.random() < 0.5 ? 1 : 0;
+    const isRecurring = Math.random() < 0.1 ? 1 : 0; // ~10% chance of breakdown being recurring
     let faultCodes = null;
     if (Math.random() < 0.6) {
         const numCodes = Math.floor(Math.random() * 3) + 1;
@@ -181,11 +197,14 @@ function reportBreakdown(machine, user, role, sqlTime) {
         for (let i = 0; i < numCodes; i++) codes.push(randomItem(FAULT_CODES));
         faultCodes = JSON.stringify([...new Set(codes)]);
     }
-    simQueries.insertFault.run({ machine_id: machine.id, user_name: user, user_role: role, category: randomItem(FAULT_CATEGORIES), severity: 'High', description: randomItem(FAULT_DESCRIPTIONS), screenshot_taken: hasScreenshot, fault_codes: faultCodes, created_at: sqlTime });
+
+    const description = randomItem(FAULT_DESCRIPTIONS) + (isRecurring ? ' (Recurring)' : '');
+
+    simQueries.insertFault.run({ machine_id: machine.id, user_name: user, user_role: role, category: randomItem(FAULT_CATEGORIES), severity: 'High', description: description, screenshot_taken: hasScreenshot, fault_codes: faultCodes, created_at: sqlTime });
     simQueries.insertStatusHistory.run({ machine_id: machine.id, old_status: machine.status, new_status: newStatus, old_power: machine.power, new_power: machine.power, changed_by: user, reason: 'Simulated breakdown reported', created_at: sqlTime });
     simQueries.updateStatus.run({ id: machine.id, status: newStatus, updated_at: sqlTime });
-    simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'FAULT_REPORTED', detail: `Simulated: [High] Breakdown`, ip_address: '127.0.0.1', created_at: sqlTime });
-    simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: role, activity: 'Fault reported', notes: `[High] Breakdown (simulated)`, created_at: sqlTime });
+    simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'FAULT_REPORTED', detail: `Simulated: [High] Breakdown${isRecurring ? ' (Recurring)' : ''}`, ip_address: '127.0.0.1', created_at: sqlTime });
+    simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: role, activity: 'Fault reported', notes: `[High] Breakdown (simulated)${isRecurring ? ' (Recurring)' : ''}`, created_at: sqlTime });
 }
 
 function resolveFault(fault, user, sqlTime) {
@@ -212,6 +231,22 @@ function resolveBreakdown(machine, user, simTime, sqlTime) {
     simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: 'System', activity: 'Breakdown resolved', notes: detailStr, created_at: sqlTime });
 }
 
+function addConcession(machine, user, sqlTime) {
+    const type = randomItem(CONCESSION_TYPES);
+    const desc = `Simulated temporary restriction/bypass due to minor issues.`;
+    const reviewer = Math.random() < 0.5 ? randomItem(USERS) : null;
+    
+    simQueries.insertConcession.run({ machine_id: machine.id, type: type, description: desc, user_name: user, review_by: reviewer, active: 1, created_at: sqlTime });
+    simQueries.insertAudit.run({ machine_id: machine.id, user_name: user, action: 'CONCESSION_ADDED', detail: `[${type}] ${desc}`, ip_address: '127.0.0.1', created_at: sqlTime });
+    simQueries.insertActivity.run({ machine_id: machine.id, user_name: user, user_role: 'System', activity: 'Concession added', notes: `[${type}] ${desc}`, created_at: sqlTime });
+}
+
+function resolveConcession(concession, user, sqlTime) {
+    simQueries.resolveConcession.run({ id: concession.id });
+    simQueries.insertAudit.run({ machine_id: concession.machine_id, user_name: user, action: 'CONCESSION_REMOVED', detail: `Removed [${concession.type}] ${concession.description}`, ip_address: '127.0.0.1', created_at: sqlTime });
+    simQueries.insertActivity.run({ machine_id: concession.machine_id, user_name: user, user_role: 'System', activity: 'Concession removed', notes: `Removed [${concession.type}] ${concession.description}`, created_at: sqlTime });
+}
+
 // --- START SIMULATION ---
 async function runBatch() {
     console.log(`[sim] Wiping old logs to generate a clean slate...`);
@@ -219,6 +254,7 @@ async function runBatch() {
     db.exec('DELETE FROM audit_trail');
     db.exec('DELETE FROM activity_log');
     db.exec('DELETE FROM faults');
+    db.exec('DELETE FROM concessions');
     db.exec("UPDATE machines SET power = 1, status = 'none'");
 
     console.log(`[sim] Starting rapid batch simulation for the last ${SIMULATION_DAYS} days...`);

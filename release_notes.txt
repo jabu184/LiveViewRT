@@ -1,3 +1,8 @@
+-v1.39
+    -Fixed - Bug switch on/off when locked to a machine
+    -Added - Clicking on fault days highlights faults 
+-v1.38
+    -Added - Fault category history plot
 -v1.37
     -Updated - Navigation changes, back button etc.
     -Updated - Admin graphs
